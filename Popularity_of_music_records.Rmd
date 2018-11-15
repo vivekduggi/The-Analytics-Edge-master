@@ -1,0 +1,103 @@
+           
+                    ########################################################################
+                    #############  Predicting popularity of music records  #################
+                    ########################################################################
+                    
+                    
+```{r}
+##### Loading the dataset
+##### There are 7574 obseravations in the songs dataset and 39 variables.
+##### There are 18 songs for which the artist name is Michael Jackson.
+
+songs = read.csv("songs.csv")
+str(songs)
+table(songs$year)
+table(songs$timesignature)
+MichaelJackson = subset(songs, songs$artistname == "Michael Jackson")
+str(MichaelJackson)
+```
+
+```{r}
+##### Top 10 songs of Michael jackson
+
+MichaelJackson$songtitle
+MichaelJackson$Top10[13]
+MichaelJackson$Top10[1]
+MichaelJackson$Top10[4]
+MichaelJackson$Top10[5]
+```
+
+```{r}
+##### Song with the highest tempo
+
+which.max(songs$tempo)
+songs$songtitle[6206]
+```
+
+```{r}
+                          #########################################    
+                          ##### Creating our prediction model #####
+                          #########################################
+
+
+##### We split our data into training and testing set.
+##### Our training set will include songs released before year 2010,
+##### and our testing set will include songs released in year 2010
+##### We will only use those variables in our dataset that describe the
+##### Numerical attribute of songs fro our logistic regression model.
+##### i.e., we won't use "year", "songtitle", "artistname", "songID", "artistID".
+
+songsTrain = subset(songs, year <= 2009)
+songsTest = subset(songs, year == 2010)
+nonvars= c("year","songtitle", "artistname", "songID", "artistID")
+songsTrain = songsTrain[,!(names(songsTrain)%in%nonvars)]
+songsTest = songsTest[,!(names(songsTest)%in%nonvars)]
+songsLog1 = glm(Top10 ~., data = songsTrain, family = "binomial")
+summary(songsLog1)
+
+##### Note: From sumary of our model we can see that timesignature_confidence,
+##### tempo_confidence, key_confidence are very significant for our model, the higher they are
+##### the higher the probability of our song to reach top 10.
+```
+
+```{r}
+##### Correlation between varible "loudness" and "energy"
+
+cor(songsTrain$loudness, songsTrain$energy)
+
+##### Note: "loudness" and "energy" are highly correlated, so to avoid this issue
+##### we will omit one of thode two variables and rerun the logistic regression.
+```
+
+```{r}
+##### Model 2 keeps "energy" and omits "loudness"
+##### We can omit a numeric variable by using minus sign,
+##### but the same can't be done with a non-numeric variable.
+
+songsLog2 = glm(Top10 ~. -loudness, data = songsTrain, family = "binomial")
+summary(songsLog2)
+```
+```{r}
+##### Model 3 keeps "loudness" and omits "energy"
+
+songsLog3 = glm(Top10 ~. - energy, data = songsTrain, family = binomial)
+
+##### Note: For the remainder of the problem we'll use model 3
+
+summary(songsLog3)
+```
+
+```{r}
+##### Validating our model 
+
+predTest = predict(songsLog3, newdata = songsTest, type="response")
+table(songsTest$Top10, predTest >= 0.45)
+table(songsTest$Top10)
+sprintf("Sensitivity of model3 => %f", (19)/(40+19))
+sprintf("Specificity of model3 => %f", 309/(314))
+
+##### Note: Since specificity of our model is high it is more likely to predict 
+##### a song that is not going to reach top 10, than a song that is going to reach
+#### top 10. It follows a conservative approach.
+```
+

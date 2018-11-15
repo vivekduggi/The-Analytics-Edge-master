@@ -1,0 +1,148 @@
+---
+title: "State Data"
+output: html_notebook
+---
+
+###1. Linear regression model
+
+1. Loading dataset 
+
+```{r}
+data(state)
+stateData = data.frame(state.x77)
+str(stateData)
+```
+
+
+2. Building linear regression model
+
+```{r}
+stateLin = lm(Life.Exp ~ ., data = stateData)
+summary(stateLin)
+```
+
+3. Making predictions
+
+```{r}
+statepred = predict(stateLin)
+SSE = sum((statepred - stateData$Life.Exp)^2)
+cat("Sum of squared errors for linear model =>", SSE)
+```
+
+4. Buliding linear regression model by taking **significant variables** from **stateLin**
+
+```{r}
+stateLin2 = lm(Life.Exp ~ Population + Frost + Murder + HS.Grad, data = stateData)
+summary(stateLin2)
+```
+
+
+5. Making predictions using model **stateLin2**
+
+```{r}
+statepred2 = predict(stateLin2)
+cat("Sum of squared errors for stateLin2 =>", sum((statepred2 - stateData$Life.Exp)^2))
+```
+
+
+
+
+###2.  CART models
+
+1. Importing required libraries
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+2. Building CART models
+
+```{r}
+stateCART = rpart(Life.Exp ~ ., data = stateData, minbucket = 5)
+prp(stateCART)
+```
+
+
+3. Predicting life expectancy
+
+```{r}
+stateCARTpred = predict(stateCART)
+cat("Sum of squared errors for our CART model =>", sum((stateCARTpred - stateData$Life.Exp)^2))
+```
+
+
+4. CART model using only **Area** as an independent variable
+
+```{r}
+stateCART2 = rpart(Life.Exp ~ Area, data = stateData, minbucket = 1)
+prp(stateCART2)
+stateCARTpred2 = predict(stateCART2)
+cat("SSE of stateCART2 =>", sum((stateCARTpred2 - stateData$Life.Exp)^2))
+```
+
+###3. Cross-validation 
+
+1. Loading libraries
+
+```{r}
+library(caret)
+library(e1071)
+set.seed(111)
+```
+
+```{r}
+stateControl = trainControl(method = "cv", number = 10)
+cartGrid = expand.grid(.cp = seq(0.01,0.50,0.01))
+stateTrain = train(Life.Exp ~ ., data = stateData, method = "rpart", trControl = stateControl, tuneGrid = cartGrid)
+```
+```{r}
+stateTrain
+```
+
+
+
+Note: We see that cp = 0.12 is the optimal choice
+
+
+2. Building CART model using cp = 0.12
+
+```{r}
+stateCART3 = rpart(Life.Exp ~ ., data = stateData, cp = 0.12)
+prp(stateCART3)
+stateCARTpred3 = predict(stateCART3)
+cat("SSE of our tree with cp = 0.12 =>", sum((stateCARTpred3 - stateData$Life.Exp)^2))
+```
+
+
+
+Note: We observe that our CART model with cp = 0.12 has greater SSE than all other CART trees , that means , it performs slightly worse than all the other CART trees on our training set, but we'll still choose it, for our testing set, because the purpose of cross - validation is to pick a tree which will perform best on our test set, so we would expect that the model we made with the best **cp** performs best on our test set.
+
+
+
+###4. Cross-validation for **Area** as an independent variable
+
+1. Finding optimal value of cp
+
+```{r}
+set.seed(111)
+stateControl1 = trainControl(method = "cv", number = 10)
+cartGrid = expand.grid(.cp = seq(0.01,0.50,0.01))
+stateTrain1 = train(Life.Exp ~ Area, data = stateData, method = "rpart", trControl = stateControl, tuneGrid = cartGrid)
+```
+
+```{r}
+stateTrain1
+```
+
+
+2. Making model with **Area** as an independent variable with cp = 0.06
+
+```{r}
+stateCARTarea = rpart(Life.Exp ~ Area, data = stateData, cp = 0.06)
+prp(stateCARTarea)
+stateAreaPred = predict(stateCARTarea)
+cat("SSE for our CART model using area =>", sum((stateAreaPred - stateData$Life.Exp)))
+```
+
+Note: Cross-validation is intended to select the optimal parameters for a model, it may or may not decrease the sum of squred errors, it is not intended to fit the model on dataset.

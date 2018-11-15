@@ -1,0 +1,186 @@
+---
+title: "Pre_processing in R"
+output: html_notebook
+---
+
+
+###1. Loading dataset
+
+```{r}
+tweets = read.csv("tweets.csv", stringsAsFactors = FALSE)
+str(tweets)
+```
+
+###2. Adding new variable to our dataset
+
+```{r}
+tweets$Negative = as.factor(tweets$Avg <= -1)
+table(tweets$Negative)
+```
+
+###3. Installing relevant packages
+
+```{r}
+library(tm)
+library(SnowballC)
+```
+
+###4. Converting our tweets to corpus
+
+*Note: A corpus is a collection of documents.*
+
+```{r}
+corpus = Corpus(VectorSource(tweets$Tweet))
+corpus[[1]]$content
+```
+
+*Changing our tweets to lower case*
+
+```{r}
+corpus = tm_map(corpus, tolower)
+corpus[[1]]$content
+```
+
+*Removing punctuation from our tweets*
+
+```{r}
+corpus = tm_map(corpus, removePunctuation)
+corpus[[1]]$content
+```
+
+*Removing stop words*
+
+```{r}
+stopwords("english")[1:10]
+corpus = tm_map(corpus, removeWords, c("apple", stopwords("english")))
+corpus[[1]]$content
+```
+
+Note: We have removed word **apple** along with stopwords from our tweets because it appears in almost every tweet, and may not be useful.
+
+
+*Stemming our document*
+
+```{r}
+corpus = tm_map(corpus, stemDocument)
+corpus[[1]]$content
+```
+
+
+
+###5. Bag of words in R
+
+*frequencies of word that appear in our tweets*
+
+```{r}
+frequencies = DocumentTermMatrix(corpus) 
+frequencies
+inspect(frequencies[1000:1005, 505:515])
+findFreqTerms(frequencies, lowfreq = 20)
+```
+
+Note: We see that only 56 terms appear more than 20 times in our tweets, this means that there are probably large number of terms that are useless for our prediction model
+
+*Removing terms that appear very often*
+
+```{r}
+sparse = removeSparseTerms(frequencies, 0.995)
+sparse
+```
+
+
+Note: The threshold value for **removeSparseTerms()** works as follows, if we say that 0.98, this means only keep terms that appear in 2% or more of thet tweets.
+
+
+
+*Converting sparse matrix to a dataframe*
+
+```{r}
+tweetsSparse = as.data.frame(as.matrix(sparse))
+colnames(tweetsSparse) = make.names(colnames(tweetsSparse))
+tweetsSparse$Negative = tweets$Negative
+```
+
+Note: make.names() makes syntactically valid names out of our variable names
+
+
+
+###6. Splitting our data into training set and testing set
+
+```{r}
+library(caTools)
+set.seed(123)
+```
+
+```{r}
+split = sample.split(tweetsSparse$Negative, SplitRatio = 0.7)
+train = subset(tweetsSparse, split == TRUE)
+test = subset(tweetsSparse, split == FALSE)
+```
+
+
+###7. Building CART models
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+tweetCART = rpart(Negative ~., data = train, method = "class")
+prp(tweetCART)
+```
+*Numerical performance of our model*
+
+```{r}
+predictCART = predict(tweetCART, newdata = test, type = "class")
+table(test$Negative, predictCART)
+cat("Accuracy of our CART model =>", (294+18)/nrow(test))
+```
+
+*Accuracy fo our baseline model*
+
+```{r}
+table(test$Negative)
+cat("Accuracy of our baseline model =>", 300/nrow(test))
+```
+
+
+
+###8. Building random forest model
+
+```{r}
+library(randomForest)
+set.seed(123)
+```
+
+```{r}
+tweetRF = randomForest(Negative ~., data = train)
+```
+
+*Making predictions using our random forest model*
+
+```{r}
+predictRF = predict(tweetRF, newdata = test)
+table(test$Negative, predictRF)
+cat("Accuracy of our random forest model =>", (293+21)/nrow(test))
+```
+
+
+Note: The accuarcy of our random forest model is slightly better than our CART model, but due to interpretibility issues we'll choose CART model.
+
+
+###9. Building a Logistic Regression model
+
+```{r}
+tweetLog = glm(Negative ~., data = train, family = "binomial")
+```
+
+```{r}
+predictLog = predict(tweetLog, newdata = test, type = "response")
+table(test$Negative, predictLog > 0.5)
+cat("Accuracy of our logistic regression model with threshold of 0.5 =>", (246+32)/nrow(test))
+```
+
+
+Note: We see that our Logistic Regression model has a lower accuracy of **0.7830986** than CART or random forest model, this is because of the overfitting caused due to large number of independent variables.

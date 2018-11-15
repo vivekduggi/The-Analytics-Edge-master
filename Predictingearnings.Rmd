@@ -1,0 +1,187 @@
+---
+title: "Predicting earnings from census data"
+output: html_notebook
+---
+
+###1. Loading data
+
+```{r}
+earnings = read.csv("census.csv")
+str(earnings)
+summary(earnings)
+```
+
+###2. Building logistic regression model to predict whether individual earns more than **$50,000**.
+
+1. Splitting data
+
+```{r}
+library(caTools)
+set.seed(2000)
+split = sample.split(earnings$over50k, SplitRatio = 0.6)
+train = subset(earnings, split == TRUE)
+test = subset(earnings, split == FALSE)
+```
+
+2. Making logistic regression model
+
+```{r}
+earnLog = glm(over50k ~ ., data = train, family = "binomial")
+summary(earnLog)
+```
+
+3. Making prediction on testing set
+
+```{r}
+earnPred = predict(earnLog, newdata = test, type = "response")
+table(test$over50k)
+cat("Accuracy for logistic regression model=>", (1888+9051)/nrow(test),"\n")
+cat("Accuracy for baseline model =>", (9713/nrow(test)), "\n")
+```
+
+4. Area under the curve
+
+```{r}
+library(ROCR)
+earnROCRpred = prediction(earnPred, test$over50k)
+cat("Area under curve =>", as.numeric(performance(earnROCRpred, "auc")@y.values))
+plot(performance(earnROCRpred, "tpr", "fpr"), main = "Area Under Curve")
+```
+
+
+
+
+*Note: We see that our logistic regression model achieves a very high accuracy.
+
+
+
+###3. Building a CART model
+
+1. CART model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+earnCART = rpart(over50k ~ ., data = train, method = "class")
+prp(earnCART)
+```
+
+
+2. Making predictions on testing set
+
+```{r}
+earnCARTpred = predict(earnCART, newdata = test, type = "class")
+table(test$over50k, earnCARTpred)
+cat("Accuracy of CART model =>", (9243+1596)/nrow(test))
+
+```
+
+
+3. Area under curve
+
+```{r}
+earnCARTpred1 = predict(earnCART, newdata = test)
+earnCARTrocr = prediction(earnCARTpred1[,2], test$over50k)
+cat("Area under curve =>", as.numeric(performance(earnCARTrocr, "auc")@y.values), "\n")
+plot(performance(earnCARTrocr, "tpr", "fpr"), main = "Area Under Curve")
+cat("Unique number of values predicted by CART model =>", unique(earnCARTpred1[,2]), "\n")
+```
+
+
+
+*Note: Compared to the logistic regression ROC curve the CART ROC curve is less smooth because the CART model only takes a handful of values, the change in ROC curve correspond to setting the threshold to one of those values.
+
+
+
+
+###4. Building a random forest model
+
+*Note: Because a random forest model is very computationaly expensive, we will randomly select 2000 observations from our test set.
+
+1. Selecting observations
+
+```{r}
+set.seed(1)
+trainSmall = train[sample(nrow(test), 2000),]
+```
+
+
+2. Making random forest model
+
+```{r}
+library(randomForest)
+set.seed(1)
+earnForest = randomForest(over50k ~ ., data = trainSmall)
+earnForestPred = predict(earnForest, newdata = test)
+table(test$over50k, earnForestPred)
+cat("Acuracy of random forest model =>", (9617+918)/nrow(test), "\n")
+```
+
+3. Looking which variables are important
+
+```{r}
+vu = varUsed(earnForest, count = TRUE)
+vusorted = sort(vu, decreasing=FALSE, index.return = TRUE)
+dotchart(vusorted$x, names(earnForest$forest$xlevels[vusorted$ix]))
+```
+
+
+*Note: The above code produces a chart that measures number of times a variable has been used for making splits.
+
+
+
+4. Measuring impurity of tree
+
+```{r}
+varImpPlot(earnForest)
+```
+
+
+
+Note: Variable **age** gives the largest reduction in impurity
+
+
+
+###5. Choosing cp by cross-validation
+
+1. Setting seed
+
+```{r}
+set.seed(2)
+library(caret)
+library(e1071)
+```
+2. Performing cross validation
+
+```{r}
+earnControl = trainControl(method = "cv", number = 10)
+cartGrid = expand.grid(.cp = seq(0.002,0.1,0.002))
+earnTrain = train(over50k ~ ., data = train, method = "rpart", trControl = earnControl, tuneGrid = cartGrid)
+```
+
+```{r}
+earnTrain
+```
+
+3. Selecting best model
+
+```{r}
+earnBest = rpart(over50k ~ ., data = train, method = "class", cp = 0.002)
+prp(earnBest)
+```
+
+
+4. Making predictions
+
+```{r}
+earnBestPred = predict(earnBest, newdata = test, type = "class")
+table(test$over50k, earnBestPred)
+cat("Accuracy of our CART model with cp 0.002 =>", (9178+1838)/nrow(test), "\n")
+```
+
+
+
+Note: From above we observe that when we use cp = 0.002, our accuracy increases by 1% but our model becomes more complex, so we should prefer a model with somewhat lower accuracy but, with higher interpretibility.

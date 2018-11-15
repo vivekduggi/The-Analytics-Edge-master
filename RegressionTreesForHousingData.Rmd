@@ -1,0 +1,173 @@
+Regression tress for housing data
+=================
+
+                          
+                          
+Loading data
+
+```{r}
+boston = read.csv("boston.csv")
+str(boston)
+```
+Plotting longitude vs latitude and census tracts that lie along Charles river, and the location of MIT
+
+```{r}
+plot(boston$LON, boston$LAT)
+points(boston$LON[boston$CHAS == 1], boston$LAT[boston$CHAS == 1], col="blue", pch = 19)
+points(boston$LON[boston$TRACT == 3531], boston$LAT[boston$TRACT == 3531], col="red", pch=19)
+summary(boston$NOX)
+points(boston$LON[boston$NOX >= 0.55], boston$LAT[boston$NOX >= 0.55], col = "green", pch = 19)
+```
+
+
+
+
+Variation in prices
+
+```{r}
+plot(boston$LON, boston$LAT)
+summary(boston$MEDV)
+points(boston$LON[boston$MEDV >= 21.2], boston$LAT[boston$MEDV >= 21.2], col="red", pch = 19)
+```
+
+
+Relationship between latitude, longitude and prices
+
+```{r}
+graphs = par(mfrow = c(2,1))
+plot(boston$LAT, boston$MEDV, xlab = "Latitude", ylab="Prices", main ="Prices vs Latitude")
+plot(boston$LON, boston$MEDV, xlab = "Longitude", ylab="Prices", main ="Prices vs Longitude")
+par(graphs)
+```
+Analysing the above graphs we find that there is a non-linear relationship between price and latitude, and price and longitude
+
+We'll try to fit a linear regression anyway.
+
+```{r}
+latLonLm = lm(MEDV ~ LAT + LON, data = boston)
+summary(latLonLm)
+plot(boston$LON, boston$LAT)
+points(boston$LON[boston$MEDV >= 21.2], boston$LAT[boston$MEDV >= 21.2], col="red", pch = 19)
+points(boston$LON[latLonLm$fitted.values >= 21.2], boston$LAT[latLonLm$fitted.values >=21.2], col = "blue", pch = "$")
+```
+```{r}
+latLonLm$fitted.values
+```
+
+
+
+
+
+
+
+Regression trees
+
+We will use regression trees to predict the cost of housing instead of linear regression
+```{r}
+library(rpart)
+library(rpart.plot)
+latlonTree = rpart(MEDV ~ LAT + LON, data = boston)
+prp(latlonTree)
+plot(boston$LON, boston$LAT, xlab = "Longitude", ylab = "Latitutde", main = "Tracts with price above median" )
+points(boston$LON[boston$MEDV >= 21.2], boston$LAT[boston$MEDV >= 21.2], col = "red", pch = 19)
+fittedValues = predict(latlonTree)
+points(boston$LON[fittedValues >= 21.2], boston$LAT[fittedValues >= 21.2], col="blue", pch = "$"  )
+```
+
+From above plot we see that our regression tree model is more accurate than our linear regression model, but it is very complicated and prone to overfitting, so now we'll make another tree model with a lesser minbucket size.
+
+```{r}
+latlonTree = rpart(MEDV ~ LAT + LON, data = boston, minbucket = 50)
+plot(latlonTree)
+text(latlonTree)
+plot(boston$LON, boston$LAT)
+points(boston$LON[boston$MEDV >= 21.2], boston$LAT[boston$MEDV >= 21.2], col = "red", pch = 19)
+abline(v = -71.07)
+abline(h = 42.21)
+abline(h = 42.17)
+```
+
+Note: The middle rectangle on the rights is where we can find the most affordable housing in Boston.
+
+
+
+
+
+
+Splitting our data
+
+```{r}
+library(caTools)
+set.seed(123)
+split = sample.split(boston$MEDV, SplitRatio = 0.7)
+train = subset(boston, split == TRUE)
+test = subset(boston, split == FALSE)
+```
+
+Linear Regression Model
+
+```{r}
+linReg = lm(MEDV ~ LAT + LON + CRIM + ZN + INDUS + CHAS + NOX + RM + AGE + DIS + RAD + TAX + PTRATIO, data = train)
+summary(linReg)
+```
+
+Predictions of our linear regression model
+
+```{r}
+linreg.pred = predict(linReg, newdata = test)
+linreg.sse = sum((linreg.pred - test$MEDV)^2)
+cat('Sum of squared errors =>', linreg.sse)
+```
+
+Regression tree model
+
+```{r}
+tree = rpart(formula = MEDV ~ LAT + LON + CRIM + ZN + INDUS + CHAS + NOX + 
+    RM + AGE + DIS + RAD + TAX + PTRATIO, data = train)
+prp(tree)
+```
+
+Predictions using regression trees
+
+```{r}
+tree.pred = predict(tree, newdata = test)
+tree.sse = sum((tree.pred - test$MEDV)^2)
+cat('Sum of squared error for tree model =>', tree.sse)
+```
+
+Note: The SSE for tree model is greater than linear regression model, so our regression tree model fails to do better than our linear regression model.
+Our goal when buliding a tree is to minimize the RSS or residual sum of squares, by making splits, but we want to penalize having too 
+splits.
+We define S to be the number of splits, and lambda, to be our penalty. Our goal is now to find a tree that minimizes sum(RSS) + lambda * S
+If we pick large value of lambda, we won't make many splits, because we pay very big price for each split. If we pick small value of 
+lambda, we will make splits until it no longer decreases error.
+cp = lambda / RSS(no splits)
+
+
+Performing cross validation
+
+```{r}
+library(caret)
+library(e1071)
+tr.control = trainControl(method="cv", number = 10)
+cp.grid = expand.grid(cp = (0:10) * 0.001)
+tr = train(MEDV ~ LAT + LON + CRIM + ZN + INDUS + CHAS + NOX + RM + AGE + DIS + RAD + TAX + PTRATIO,
+           data = train, method = "rpart", trControl = tr.control, tuneGrid = cp.grid)
+```
+
+```{r}
+tr
+```
+Note: From above we find that cp = 0.01 is the optimal choice.
+
+
+Creating tree using cp = 0.01 and making predictions
+
+```{r}
+best.tree = tr$finalModel
+prp(best.tree)
+best.tree.pred = predict(best.tree, newdata = test)
+best.tree.sse = sum((best.tree.pred - test$MEDV)^2)
+cat("RMSE for our final tree =>", best.tree.sse)
+```
+Note: From above we can see that our linear regression model still beats our final tree model in performance , but we see that cross validation increases performance of our regression tree.

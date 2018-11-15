@@ -1,0 +1,133 @@
+---
+title: "An introduction to clustering"
+output: html_notebook
+---
+
+
+###Loading data
+
+```{r}
+movies = read.table("movieLens.txt", header = FALSE, sep = "|", quote = "\"")
+str(movies)
+```
+
+###Adding columns
+
+```{r}
+colnames(movies) = c("ID", "Title", "ReleaseDate", "VideoReleaseDate","IMDB","Unknown","Action","Adventure", "Animation", "Childrens",
+                     "Comedy", "Crime","Documentry", "Drama","Fantasy","FilmNoir","Horror","Musical","Mystery","Romance","SciFi",
+                     "Thriller","War","Western")
+str(movies)
+```
+
+
+###Removing unwanted variables
+
+```{r}
+movies$ID = NULL
+movies$ReleaseDate = NULL
+movies$VideoReleaseDate = NULL
+movies$IMDB = NULL
+movies = unique(movies)
+```
+
+```{r}
+str(movies)
+```
+
+###Movies classified as comedy
+
+```{r}
+table(movies$Comedy)
+```
+
+###Movies classifed as western
+
+```{r}
+table(movies$Western)
+```
+
+###Movies classified as romance and drama
+
+```{r}
+table(movies$Romance, movies$Drama)
+```
+
+###Calculating distances
+
+```{r}
+distances = dist(movies[2:20], method = "euclidean")
+```
+
+###Clustering movies
+
+```{r}
+clusterMovies = hclust(distances, method = "ward.D")
+```
+
+###Plotting dendogram
+
+```{r}
+plot(clusterMovies)
+```
+
+
+###Assigning labels to our datapoints
+
+```{r}
+clusterGroups = cutree(clusterMovies, k = 10)
+```  
+
+Note: Finding average number of movies with genre action in all the clusters. *Split* and *laaply* functions are used. The below   
+command splits data into subsets based on different clusters.
+
+```{r}
+spl = split(movies[2:20], clusterGroups)
+str(spl)
+```
+
+```{r}
+lapply(spl,colMeans)
+```
+
+###Looking for specific films
+
+```{r}
+subset(movies, Title == "Men in Black (1997)")
+```  
+*Cluster for Men In Black*  
+
+```{r}
+clusterGroups[257]
+```
+
+
+###Dataset with movies from cluster 2
+
+```{r}
+cluster2 = subset(movies, clusterGroups == 2)
+cluster2$Title[1:10]
+```
+
+```{r}
+clusterGroups
+```
+
+
+
+###Clustering with k = 2
+
+```{r}
+clusterGroups2 = cutree(clusterMovies, k = 2)
+```
+
+```{r}
+spl = split(movies[2:20], clusterGroups2)
+```
+
+```{r}
+lapply(spl,colMeans)
+```
+
+
+

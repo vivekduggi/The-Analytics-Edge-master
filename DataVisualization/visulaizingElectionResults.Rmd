@@ -1,0 +1,155 @@
+---
+title: "Election Forecasting visualization"
+output: html_notebook
+---
+
+### Loading required libraries
+
+```{r}
+library(ggplot2)
+library(ggmap)
+library(maps)
+```
+
+### Loading United States map
+
+```{r}
+statesMap = map_data("state")
+```
+
+```{r}
+str(statesMap)
+```
+
+```{r}
+table(statesMap$group)
+```
+
+### Drawing US map
+
+```{r}
+ggplot(data = statesMap, aes(x = long,y = lat, group = group)) +
+  geom_polygon(fill = "white", color = "black")
+```
+
+### Coloring the States by predictions
+
+* Loading data
+
+```{r}
+polling = read.csv("PollingImputed.csv")
+```
+
+* Splitting the data
+
+```{r}
+train <- subset(polling, Year == 2004 | Year == 2008)
+test <- subset(polling, Year == 2012)
+```
+
+* Making a logistic regression model
+
+```{r}
+names(train)
+mod2 = glm(Republican ~ SurveyUSA + DiffCount, data = train, family = "binomial")
+```
+
+```{r}
+summary(mod2)
+```
+
+```{r}
+testPrediction = predict(mod2, newdata = test, type = "response")
+```
+
+```{r}
+testPredictionBinary <- as.numeric(testPrediction > 0.5)
+str(testPredictionBinary)
+```
+
+```{r}
+predictionDataFrame <- data.frame(testPrediction, testPredictionBinary, test$State)
+str(predictionDataFrame)
+```
+
+```{r}
+table(predictionDataFrame$testPredictionBinary)
+```
+
+```{r}
+mean(predictionDataFrame$testPrediction)
+```
+
+* Coloring the states by predictions
+
+```{r}
+predictionDataFrame$region <- tolower(predictionDataFrame$test.State)
+predictionMap <- merge(statesMap, predictionDataFrame, by = "region")
+predictionMap <- predictionMap[order(predictionMap$order),]
+```
+
+```{r}
+nrow(predictionMap)
+nrow(statesMap)
+```
+
+```{r}
+ggplot(predictionMap, aes(x = long, y = lat, group = group, fill = testPredictionBinary)) +
+  geom_polygon(color = "black")
+```
+
+
+```{r}
+ggplot(predictionMap, aes(x = long, y = lat, group = group, fill = testPredictionBinary)) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "blue", high = "red", guide = "legend", breaks = c(0,1), labels = c("Democrat", "Republican"), name = "Prediction 2012")
+```
+
+
+```{r}
+ggplot(predictionMap, aes(x = long, y = lat, group = group, fill = testPrediction)) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "blue", high = "red", guide = "legend", breaks = c(0,1), labels = c("Democrat", "Republican"), name = "Prediction 2012")
+```
+
+* Predicted probability for Florida
+
+```{r}
+library(dplyr)
+```
+
+
+```{r}
+predFlorida <- predictionMap %>%
+  filter(test.State == "Florida")
+```
+
+```{r}
+mean(predFlorida$testPrediction)
+```
+
+* Changing size of border
+
+```{r}
+ggplot(predictionMap, aes(x = long, y = lat, group = group, fill = testPrediction)) +
+  geom_polygon(color = "black", size = 3) + 
+  scale_fill_gradient(low = "blue", high = "red", guide = "legend", breaks = c(0,1), labels = c("Democrat", "Republican"), name = "Prediction 2012")
+```
+
+* Changing linetype
+
+```{r}
+ggplot(predictionMap, aes(x = long, y = lat, group = group, fill = testPrediction)) +
+  geom_polygon(color = "black", linetype = 2) + 
+  scale_fill_gradient(low = "blue", high = "red", guide = "legend", breaks = c(0,1), labels = c("Democrat", "Republican"), name = "Prediction 2012")
+```
+
+* Changing alpha
+
+```{r}
+ggplot(predictionMap, aes(x = long, y = lat, group = group, fill = testPrediction)) +
+  geom_polygon(color = "black", alpha = 0.3) + 
+  scale_fill_gradient(low = "blue", high = "red", guide = "legend", breaks = c(0,1), labels = c("Democrat", "Republican"), name = "Prediction 2012")
+```
+
+

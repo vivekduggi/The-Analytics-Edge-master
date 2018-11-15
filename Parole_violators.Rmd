@@ -1,0 +1,68 @@
+                         #################################################################
+                         ##### Predicting parole violators using logistic regression #####
+                         #################################################################
+
+
+##### Loading and investigating data
+
+```{r}
+setwd("/home/amanlp7/R_datasets/")
+parole = read.csv("parole.csv")
+str(parole)
+summary(parole)
+```
+##### Parolees that have violated the terms of parole
+
+```{r}
+table(parole$violator)
+```
+##### Converting State and Crime variables to factors
+
+```{r}
+parole$crime = as.factor(parole$crime)
+parole$state = as.factor(parole$state)
+summary(parole)
+```
+##### Splitting data into training and testing set
+
+```{r}
+set.seed(144)
+library(caTools)
+split = sample.split(parole$violator, SplitRatio = 0.7)
+train = subset(parole, split == TRUE)
+test = subset(parole, split == FALSE)
+```
+##### Buliding a Logistic Regression Model
+
+```{r}
+paroleLog = glm(violator ~ ., data = train, family = "binomial")
+summary(paroleLog)
+```
+##### Evaluating the model on the test set
+
+```{r}
+predictTest = predict(paroleLog, newdata = test, type = "response")
+max(predictTest)
+```
+##### Calculating model's senstivity and specifcity
+
+```{r}
+table(test$violator, predictTest >= 0.5)
+sprintf("Sensitivity => %f", 12/23)
+sprintf("Specificty => %f", 167/179)
+sprintf("Accuracy => %f", 179/202)
+```
+##### Accuracy of base model
+
+```{r}
+table(test$violator)
+sprintf("Accuracy => %f", 179/202 )
+```
+##### AUC value of our model
+
+```{r}
+library(ROCR)
+pred = prediction(predictTest, test$violator)
+as.numeric(performance(pred, "auc")@y.values)
+```
+

@@ -1,0 +1,147 @@
+---
+title: "The Analytical Policeman"
+output: html_notebook
+---
+
+### Loading data
+
+```{r}
+mvt = read.csv("mvt.csv", stringsAsFactors = FALSE)
+str(mvt)
+```
+### Coverting to date-time object
+
+```{r}
+mvt$Date = strptime(mvt$Date, format = "%m/%d/%y %H:%M")
+```
+
+```{r}
+mvt$Weekday = weekdays(mvt$Date)
+mvt$Hour = mvt$Date$hour
+```
+
+```{r}
+str(mvt)
+```
+
+### Creating lineplots
+
+```{r}
+weekday_counts = as.data.frame(table(mvt$Weekday))
+str(weekday_counts)
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+weekday_counts$Var1 = factor(weekday_counts$Var1, ordered = TRUE, levels =  c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))
+```
+
+```{r}
+ggplot(weekday_counts, aes(x = Var1, y = Freq)) + geom_line(aes(group = 1)) + 
+  xlab("Day of the week") + ylab("Total motor vehicle thefts")
+```
+
+```{r}
+table(mvt$Weekday, mvt$Hour)
+DayHourCounts = as.data.frame(table(mvt$Weekday, mvt$Hour))
+```
+
+```{r}
+str(DayHourCounts)
+head(DayHourCounts)
+DayHourCounts$Hour = as.numeric(as.character(DayHourCounts$Var2))
+```
+
+```{r}
+ggplot(aes(x = Hour, y = Freq), data = DayHourCounts) + 
+  geom_line(aes(group = Var1, color = Var1), size = 2)
+```
+
+### Creating heatmaps
+
+* Reordering var1
+
+```{r}
+DayHourCounts$Var1 = factor(DayHourCounts$Var1, ordered = TRUE, levels = c("Monday","Tuesday","Wednesday","Friday","Saturday","Sunday"))
+```
+
+```{r}
+ggplot(aes(x = Hour, y = Var1), data = DayHourCounts) + geom_tile(aes(fill = Freq)) +
+  scale_fill_gradient(name = "Total MV thefts", low = "white", high = "red") + 
+  theme(axis.title.y = element_blank())
+```
+
+### A geographical hot spot map
+
+```{r}
+library(maps)
+library(ggmap)
+```
+* Loading map of Chicago
+
+```{r}
+chicago = get_map(location = "chicago", zoom = 11)
+```
+
+```{r}
+ggmap(chicago)
+```
+
+* Plotting first 100 motor thefts on the map
+
+```{r}
+ggmap(chicago) + geom_point(data = mvt[1:100,], aes(x = Longitude, y = Latitude))
+```
+
+* Rounding latitudes and longitudes to two digits and creating crime counts data
+
+```{r}
+LatLonCounts = as.data.frame(table(round(mvt$Latitude,2), round(mvt$Longitude,2)))
+str(LatLonCounts)
+summary(LatLonCounts$Freq)
+```
+
+```{r}
+LatLonCounts$Lat = as.numeric(as.character(LatLonCounts$Var1))
+LatLonCounts$Long = as.numeric(as.character(LatLonCounts$Var2))
+```
+
+```{r}
+summary(LatLonCounts)
+str(LatLonCounts)
+```
+
+* Plotting above points on map making the size and color of points depend upon the total number  
+of motor vehicle thefts
+
+```{r}
+ggmap(chicago) +
+  geom_point(aes(x = Long, y = Lat, color = Freq, size = Freq), data = LatLonCounts) +
+  scale_color_gradient(low = "yellow", high = "red")
+```
+
+* Plotting heatmaps
+
+```{r}
+ggmap(chicago) + 
+  geom_tile(data = LatLonCounts, aes(x = Long, y = Lat, alpha = Freq), fill = "red")
+```
+
+Note: We see that in the above maps points are squares are plotted in the water, this corresponds  
+to the area in water, we can remove that by choosing points having frequency > 0
+
+* Choosing points with frequency greater than 0
+
+```{r}
+LatLonCounts2 = subset(LatLonCounts, LatLonCounts$Freq > 0)
+str(LatLonCounts2)
+```
+
+```{r}
+ggmap(chicago) + 
+  geom_tile(aes(x = Long, y = Lat, alpha = Freq), data = LatLonCounts2, fill = "red")
+```
+

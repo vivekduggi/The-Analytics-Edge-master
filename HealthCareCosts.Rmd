@@ -1,0 +1,153 @@
+                       
+                         ###################################################################
+                         ####  Keeping an eye on healthcare costs: The D2Hawkeye story  ####
+                         ###################################################################
+                         
+                         
+                         
+Loading dataset
+
+```{r}
+Claims = read.csv("ClaimsData.csv")
+str(Claims)
+prop.table(table(Claims$bucket2009))
+prop.table(table(Claims$diabetes))
+mean(Claims$age)
+```
+Above we can see that ==>
+1. Around 70% patients fall in bucket 1
+2. 20% patients fall in bucket 2
+3. Remaining 3 buckets contains 10% of all the patients
+
+
+
+## ===================================
+
+
+
+Splitting data into training nad testing set
+
+```{r}
+library(caTools)
+set.seed(88)
+spl = sample.split(Claims$bucket2009, SplitRatio = 0.6)
+ClaimsTrain =  subset(Claims, spl == TRUE)
+ClaimsTest = subset(Claims, spl == FALSE)
+
+```
+
+## ===================================
+
+
+
+
+Let's see the baseline method used by D2Hawkeye. The baseline method would predict that the cost bucket of the patient in 2009 will be same as it was in 2008.
+
+A classification matrix
+
+```{r}
+table(ClaimsTest$bucket2009, ClaimsTest$bucket2008)
+```
+
+The accuracy of our baseline method is ratio of sum of diagnols / total observations
+
+```{r}
+sprintf("Accuracy of our model => %f", (110138+10721+2774+1539+104) / nrow(ClaimsTest))
+```
+
+For penalty matrix we will put actual outcomes on the left and the predicted outcomes on the top. The penalty matrix is calculated as, if Prediction=3, Actual=1 then the Penalty is 3 - 1 = 2. If Prediction=1 and Actual=4 then the Penalty is ((4 -1)*2) = (3*2) = 6. Higher Prediction, but lower actual, just consider the difference. Lower Prediction but higher Actual, double the difference.
+For a Prediction of 1, Actual of 5, the penalty is 8 = (4 * 2) = ((5 - 1) * 2). If Penalty and Actual are 3, then the Matrix value will be 0. This is the value you see in the diagonal line.
+
+```{r}
+PenaltyMatrix = matrix(c(0,1,2,3,4,2,0,1,2,3,4,2,0,1,2,6,4,2,0,1,8,6,4,2,0), byrow = TRUE, nrow = 5)
+PenaltyMatrix
+```
+
+To compute the penalty error of our baseline method we multiply our classification matrix by the penalty matrix
+
+```{r}
+as.matrix(table(ClaimsTest$bucket2009, ClaimsTest$bucket2008)) * PenaltyMatrix
+```
+
+The penalty error is the sum of the above matrix divided by number of observations divided by rows in our test set.
+
+```{r}
+sum(as.matrix(table(ClaimsTest$bucket2009, ClaimsTest$bucket2008)) * PenaltyMatrix) / nrow(ClaimsTest)
+```
+
+
+## ===================================
+
+
+
+Suppose we use baseline method of predicting the most frequent outcome for all our observations. The new baseline method will predict cost
+bucket 1 for everyone.
+
+```{r}
+n = nrow(ClaimsTest)
+predTest = rep(1,n)
+sprintf("Accuracy of baseline model => %f", 122978 / nrow(ClaimsTest))
+```
+Now to calculate our penalty error for our new baseline model, we multiply our vector predTest with the first column of penalty matrix.
+
+```{r}
+penalty = sum(as.matrix(table(ClaimsTest$bucket2009, predTest)) * PenaltyMatrix[,1]) / nrow(ClaimsTest)
+sprintf("Penalty error for our new baseline model => %f", penalty)
+```
+
+## ===================================
+
+
+
+                           ##########################################################
+                           ################  Buliding a CART model  #################
+                           ##########################################################
+                           
+                           
+                           
+Loading libraries.
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+Our CART model. The cp valur of 0.00005 is selected using cross validation.
+
+```{r}
+ClaimsTree = rpart(bucket2009 ~ age + arthritis + alzheimers + cancer + copd + depression + diabetes + heart.failure + ihd
+                   + kidney + osteoporosis + stroke + bucket2008 + reimbursement2008, data = ClaimsTrain, 
+                   method = "class", cp = 0.00005, parms = list(loss = PenaltyMatrix))
+```
+
+Plotting our CART model.
+
+```{r}
+prp(ClaimsTree)
+```
+
+Making predictions on our dataset.
+
+
+1. Accuarcy of our CART model
+
+```{r}
+PredictTest = predict(ClaimsTree, newdata = ClaimsTest, type = "class")
+table(ClaimsTest$bucket2009, PredictTest)
+sprintf("Accuracy of our CART model => %f", (94310+18942+4692+636+2) / nrow(ClaimsTest))
+```
+
+2. Penalty error of our CART model
+
+```{r}
+penalty = sum(as.matrix(table(ClaimsTest$bucket2009, PredictTest)) * PenaltyMatrix) / nrow(ClaimsTest)
+sprintf("Penalty error of our CART model => %f", penalty)
+```
+
+From above we can see that while CART model has an improved accuracy its penalty error is also high, it is so because our CART model by default try to maximize the accuracy and every type of error is seen as having as an penalty of one. Our CART model predicts bucket 3,4,5, rarely beacuse there are very few observations in these classes. One way to fix this is to specify a parameter called loss.
+
+
+
+## ===================================
+
+

@@ -1,0 +1,129 @@
+                                    Classification and Regression Trees in R
+                                    
+
+Loading Dataset
+
+```{r}
+stevens = read.csv("stevens.csv")
+str(stevens)
+summary(stevens)
+```
+Splitting dataset
+
+```{r}
+library(caTools)
+set.seed(3000)
+spl = sample.split(stevens$Reverse, SplitRatio = 0.7)
+train = subset(stevens, spl == TRUE)
+test = subset(stevens, spl == FALSE)
+```
+
+Creating CART model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+StevensTree = rpart(Reverse ~ Circuit + Issue + Petitioner + Respondent + LowerCourt + Unconst, data = train, method = "class",
+                    minbucket = 25)
+prp(StevensTree)
+```
+
+Making predictions on our test set
+
+We'll first make prediction using our model "StevensTree", and then make a confusion matrix to calculate accuarcy of our model.
+```{r}
+PredictCART = predict(StevensTree, newdata = test, type="class")
+table(test$Reverse, PredictCART)
+sprintf("Accuracy of our cart model => %f", (41+71)/(41+36+22+71))
+```
+
+Now we'll generate our ROC curve
+
+```{r}
+library(ROCR)
+PredictROC = predict(StevensTree, newdata = test)
+Pred = prediction(PredictROC[,2], test$Reverse)
+Perf = performance(Pred, "tpr", "fpr")
+plot(Perf)
+as.numeric(performance(Pred, "auc")@y.values)
+```
+Let's see how our CART model changes with the value of "minbucket"
+
+1. CART model with minbucket = 5
+
+```{r}
+StevensTree1 = rpart(Reverse ~ Circuit + Issue + Petitioner + Respondent + LowerCourt + Unconst, data = train, method = "class",
+                    minbucket = 5)
+prp(StevensTree1)
+```
+2. CART model with minbucket = 100
+
+```{r}
+StevensTree2 = rpart(Reverse ~ Circuit + Issue + Petitioner + Respondent + LowerCourt + Unconst, data = train, method = "class",
+                    minbucket = 100)
+prp(StevensTree2)
+```
+
+                                        Random Forest in R
+                                    
+Random forest function does not have a class method, so we need to make sure that our outcome variable is a factor .
+So we've to convert Reverse variable in our training and testing set to a factor variable
+```{r}
+library(randomForest)
+train$Reverse = as.factor(train$Reverse)
+test$Reverse = as.factor(test$Reverse)
+StevensForest = randomForest(Reverse ~ Circuit + Issue + Petitioner + Respondent + LowerCourt + Unconst, data = train, nodesize=25,
+                             ntree = 200)
+```
+Let's make prediction on test set using our random forest model
+
+```{r}
+predictForest = predict(StevensForest, newdata = test)
+table(test$Reverse, predictForest) 
+sprintf("Accuracy of our Random Forest model => %f", (42+76)/(42+35+17+76))
+```
+
+Let us see if setting different seeds for different random models give us the same accuracy.
+
+1. Random forest model with seed set to 100
+
+```{r}
+set.seed(100)
+predictForest1 = predict(StevensForest, newdata = test)
+table(test$Reverse, predictForest1)
+sprintf("Accuracy of our model with seed set to 100 => %f", (42+77)/(42+35+16+77))
+```
+2. Random forest with seed set to 200
+
+```{r}
+set.seed(200)
+predictForest2 = predict(StevensForest, newdata = test)
+table(test$Reverse, predictForest2)
+sprintf("Accuracy of our model with seed set to 200 => %f", (42+77)/(42+77+16+35))
+```
+From above we see that setting seed to different values doesn't affect accurcy of our random forest model.
+
+
+                            Selecting parameters using cross-validation in R
+                                
+```{r}
+library(caret)
+library(e1071)
+numFolds = trainControl(method = "cv", number = 10)
+cpGrid = expand.grid(.cp = seq(0.01,0.5,0.01))
+train(Reverse ~ Circuit + Issue + Petitioner + Respondent + LowerCourt + Unconst, data = train, method = "rpart", trControl = numFolds,
+      tuneGrid = cpGrid)
+```
+
+We now create a new model using the cp value of 0.18.
+
+```{r}
+StevensTreeCV = rpart(Reverse ~ Circuit + Issue + Petitioner + Respondent + LowerCourt + Unconst, data = train, method = "class",
+                      cp = 0.18)
+predictCV = predict(StevensTreeCV, newdata = test, type = "class")
+sprintf("Below is the confusion matrix ==>")
+table(test$Reverse, predictCV)
+sprintf("Accuracy of model => %f", (59+64) / (59+64+18+29))
+prp(StevensTreeCV)
+```
+

@@ -1,0 +1,56 @@
+                                    Predicting the Baseball World Series Champion
+                                    
+Loading Dataset
+
+```{r}
+baseball = read.csv("baseball.csv")
+nrow(baseball)
+length(table(baseball$Year))
+str(baseball)
+```
+Limiting to team making to playoffs
+
+```{r}
+baseball = subset(baseball, Playoffs == 1)
+nrow(baseball)
+table(table(baseball$Year))
+```
+Adding an imporatnt predictor
+
+The more the number of teams in playoffs the harder it is to win the World Series. So we add a variable NumCompetitors which is equal to the
+number of teams making it to the playoffs in the year of a particular team/year pair.
+
+```{r}
+PlayoffTable = table(baseball$Year)
+PlayoffTable[c("1990", "2001")]
+baseball$Numcompetitors = PlayoffTable[as.character(baseball$Year)]
+table(baseball$Numcompetitors)
+
+```
+
+Bivariate models for predicting World Series Winner
+
+```{r}
+baseball$WorldSeries = as.numeric(baseball$RankPlayoffs == 1)
+table(baseball$WorldSeries)
+```
+
+Making our Logistic regression model using all the independent variables
+
+```{r}
+baseballLog = glm(WorldSeries ~ Year + RA + RankSeason + Numcompetitors, data = baseball, family = "binomial")
+cor(baseball[c("Year", "RA", "RankSeason", "Numcompetitors")])
+```
+```{r}
+summary(glm(WorldSeries ~ Year, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ RA, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ RankSeason, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ Numcompetitors, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ Year + RA, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ Year + RankSeason, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ Year + Numcompetitors, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ RA + RankSeason, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ RA + Numcompetitors, data = baseball, family = binomial ))
+summary(glm(WorldSeries ~ RankSeason + Numcompetitors, data = baseball, family = binomial ))
+```
+Note:  We can see that the AIC value is minimum for the bivariate model with Numcompetitors as independent variable, so we can say that luck matters a lot in in playoffs as claimed by Billy Beane, as number of competitors has nothing to do with quality of players.

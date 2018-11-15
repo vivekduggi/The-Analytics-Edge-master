@@ -1,0 +1,81 @@
+---
+title: "Segmenting images to create data"
+output: html_notebook
+---
+
+
+### Reading our data
+
+```{r}
+flower = read.csv("flower.csv", header = FALSE)
+str(flower)
+```
+
+
+### Changing our data to matrix
+
+```{r}
+flowerMatrix = as.matrix(flower)
+str(flowerMatrix)
+```
+
+### Changing matrix to a vector
+
+```{r}
+flowerVector = as.vector(flowerMatrix)
+str(flowerVector)
+```
+
+### Creating a distance matrix
+
+```{r}
+distance = dist(flowerVector, method = "euclidean")
+```
+
+### Creating cluster
+
+```{r}
+clusterIntensity = hclust(distance, method = "ward.D2")
+clusterIntensity
+```
+
+### Plotting dendogram
+
+```{r}
+plot(clusterIntensity)
+```
+
+### Visualising the cuts by plotting rectangles around the clusters on the tree  
+
+```{r}
+plot(clusterIntensity)
+rect.hclust(clusterIntensity, k = 3, border = "red")
+```
+
+### Splitting our data into three clusters
+
+```{r}
+flowerClusters = cutree(clusterIntensity, k = 3)
+```
+
+```{r}
+spl = split(flowerVector, flowerClusters)
+```
+
+### Mean pixel intensity in each cluster
+
+```{r}
+lapply(spl,mean)
+```
+
+### Generating image
+
+```{r}
+dim(flowerClusters) = c(50,50)
+image(flowerClusters, axes = FALSE)
+```
+
+```{r}
+image(flowerMatrix, col = grey(seq(0,1,length=256)))
+```
+

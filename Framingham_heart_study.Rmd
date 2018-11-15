@@ -1,0 +1,62 @@
+##########  The Framingham Heart Study: Evaluating Risk Factors to Save Lives  ##########
+
+
+```{r}
+##### Setting up directory
+##### Importing dataset
+
+setwd("~/R_datasets/")
+framingham = read.csv("framingham.csv")
+
+##### Structure and summary of dataset
+
+str(framingham)
+summary(framingham)
+```
+
+```{r}
+##### Splitting our datset into training and testing set
+
+library(caTools)
+set.seed(1000)
+split = sample.split(framingham$TenYearCHD, SplitRatio = 0.65)
+train = subset(framingham, split == TRUE)
+test = subset(framingham, split == FALSE)
+
+```
+
+```{r}
+##### Building our logistic regression model
+
+framinghamLog = glm(TenYearCHD ~ ., data = train, family = binomial) 
+summary(framinghamLog)
+```
+
+```{r}
+##### Making predictions using our model
+
+predictTest = predict(framinghamLog, type = "response", newdata = test)
+
+##### Threshold value = 0.5 is used to create a confusion matrix
+
+table(test$TenYearCHD, predictTest > 0.5)
+accuracyOurModel = (11 + 1069) / (1069 + 11 + 6 + 187)
+sprintf("accuracyframinghamLog=> %f", accuracyOurModel)
+accuracyBaseline = (1069+6) / (1069 + 11 + 6 + 187)
+sprintf("accuracyBaseline=> %f", accuracyBaseline)
+
+##### Note:  We can see that our model barely beats the baseline model.
+```
+
+```{r}
+##### Now we will compute out of sample AUC
+
+library(ROCR)
+ROCRpred = prediction(predictTest, test$TenYearCHD)
+sprintf("AUC value=> %f",as.numeric(performance(ROCRpred, "auc")@y.values))
+
+##### We'll see that AUC equals 0.742109, it simply means that our model will be
+##### able to correctly classify, whether the given sample has high risk of CHD
+##### or not, 74 % of the time based on their independent variable characterstics.
+```
+

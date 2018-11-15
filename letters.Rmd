@@ -1,0 +1,119 @@
+Letter Recognition
+=========
+
+
+###1. Loading and inspecting dataset
+
+```{r}
+letters = read.csv("letters_ABPR.csv")
+str(letters)
+summary(letters)
+```
+
+###2. Predicting just one letter
+
+
+1. Just predicting whether a letter is B or not
+
+```{r}
+letters$isB = as.factor(letters$letter == "B")
+```
+
+2. Splitting dataset
+
+```{r}
+library(caTools)
+set.seed(1000)
+split = sample.split(letters$isB, SplitRatio = 0.5)
+train = subset(letters, split == TRUE)
+test = subset(letters, split == FALSE)
+```
+
+3. Accuracy of baseline model on test set
+
+Our baseline model predicts "not B" for every data.
+
+```{r}
+table(test$isB)
+cat("Accuracy of baseline model on our test set =>", (1175)/nrow(test))
+```
+
+
+4. Classification tree model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+CARTb = rpart(isB ~ .-letter, data = train, method = "class")
+prp(CARTb)
+Bpred = predict(CARTb, newdata = test, type = "class")
+table(test$isB, Bpred)
+cat("Accuracy of our CART model =>", (1118 + 340)/nrow(test))
+```
+
+
+5. Random forest model
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+set.seed(1000)
+Bforest = randomForest(isB ~ .-letter, data = train)
+BforestPred = predict(Bforest, newdata = test)
+table(test$isB, BforestPred)
+cat("Accuracy of random forest model =>", (1165+374)/nrow(test))
+```
+
+
+
+
+###3. Predicting letters A,B,P,R
+
+1. Converting letter variable to a factor variable
+
+```{r}
+letters$letter = as.factor(letters$letter)
+```
+
+2. Splitting data
+
+```{r}
+set.seed(2000)
+spl = sample.split(letters$letter, SplitRatio = 0.5)
+train = subset(letters, spl == TRUE)
+test = subset(letters, spl == FALSE)
+table(test$letter)
+cat("Baseline accuracy =>", (401)/nrow(test))
+```
+
+3. CART model
+
+```{r}
+CARTletter = rpart(letter ~ .-isB, data = train, method = "class")
+prp(CARTletter)
+```
+
+```{r}
+letterPred = predict(CARTletter, newdata = test, type = "class")
+table(test$letter, letterPred)
+cat("Accuracy of CART model =>", (348+318+363+340)/nrow(test))
+```
+
+
+4. Random forest model
+
+```{r}
+set.seed(1000)
+letterForest = randomForest(letter ~ .-isB, data = train)
+letterForestPred = predict(letterForest, newdata = test)
+table(test$letter, letterForestPred)
+cat("Accuracy of random forest model =>", (391+380+393+365)/nrow(test))
+```
+
+*Note: We see that the accuracy of CART model decreased significantly when transitioned to the problem of predicting of all 4 letters, but
+in case of Random Forest model the decrement was not very significant.

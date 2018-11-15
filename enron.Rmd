@@ -1,0 +1,134 @@
+---
+title: "**Predictive Coding: Bringing Text Analytics to the Courtroom**"
+output: html_notebook
+---
+
+###1. Loading dataset
+
+```{r}
+emails = read.csv("energy_bids.csv", stringsAsFactors = FALSE)
+str(emails)
+table(emails$responsive)
+```
+
+
+###2. Preprocessing the corpus
+
+1. Constructing a corpus
+
+```{r}
+library(tm)
+library(SnowballC)
+corpus = VCorpus(VectorSource(emails$email))
+strwrap(corpus[[1]])
+```
+
+
+2. Changing text to lowercase
+
+```{r}
+corpus = tm_map(corpus, tolower)
+corpus = tm_map(corpus, PlainTextDocument)
+```
+
+Note: If you are doing term level transformations like tolower etc., tm_map returns character vector instead of PlainTextDocument.
+Solution: Call tolower through content_transformer or call tm_map(corpus, PlainTextDocument) immediately after tolower
+
+
+3. Removing punctuations
+
+```{r}
+corpus = tm_map(corpus, removePunctuation)
+```
+
+4. Stemming document
+
+```{r}
+corpus = tm_map(corpus, stemDocument)
+corpus$content[[1]]
+corpus = tm_map(corpus, removeWords, stopwords("english"))
+```
+
+
+
+###3. Building the document term matrix
+
+```{r}
+dtm = DocumentTermMatrix(corpus)
+dtm = removeSparseTerms(dtm, 0.97)
+dtm
+
+```
+
+```{r}
+labeledTerms = as.data.frame(as.matrix(dtm))
+labeledTerms$responsive = emails$responsive
+```
+
+
+
+###4. Splitting the data
+
+1. Loading libraries
+
+```{r}
+library(caTools)
+set.seed(144)
+```
+
+2. Obtaining the split variable
+
+```{r}
+split = sample.split(labeledTerms$responsive, 0.7)
+```
+
+3. Training and testing set
+
+```{r}
+train = subset(labeledTerms, split == TRUE)
+test = subset(labeledTerms, split == FALSE)
+```
+
+###5. A simple CART model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+emailCART = rpart(responsive ~ ., data = train, method = "class")
+prp(emailCART)
+```
+
+
+
+```{r}
+pred = predict(emailCART, newdata = test)
+pred[1:10,]
+pred.prob = pred[,2]
+table(test$responsive, pred.prob >= 0.5)
+cat("Accuracy of our CART model =>", (195+25)/nrow(test))
+table(test$responsive)
+cat("Accuracy of our baseline model =>", (215)/nrow(test))
+```
+
+Note: For documents that are predicted to be responsive, but are actually non-responsive, means extra manual work, but it causes no further harm because manual review process removes the erroneous result, but in case of false negatives, a document which is responsive misses manual review process, and has penalty cost associated to it. 
+
+
+
+```{r}
+library(ROCR)
+```
+
+```{r}
+predROCR = prediction(pred.prob, test$responsive)
+perfROCR = performance(predROCR, "tpr", "fpr")
+plot(perfROCR, colorize = TRUE)
+area = as.numeric(performance(predROCR, "auc")@y.values)
+cat("AUC =>", area)
+```
+
+
+
+Note: From the graph we can see that if our sensitivity is high, somewhat equals to 0.7, then we can identify 70% of all the responsive documents, and sensitivity  = 0.2, i.e, we are identifying 20% of non-responsive documents as responsive. Since typically the vast majority of our doucments are non-responsive, operating at this cut-off would result in large decrease in the manual effort neede for the ediscovery process.

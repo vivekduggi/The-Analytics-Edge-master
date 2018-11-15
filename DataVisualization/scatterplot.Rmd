@@ -1,0 +1,120 @@
+---
+title: "Basic scatterplot using ggplot"
+output: html_notebook
+---
+
+### Loading dataset
+
+```{r}
+WHO = read.csv("WHO.csv")
+str(WHO)
+```
+
+### Scatter plot => GNI vs Fertility rate
+
+```{r}
+plot(WHO$GNI, WHO$FertilityRate)
+```
+
+* Using ggplot
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+scatterplot = ggplot(WHO, aes(x = GNI, y = FertilityRate))
+scatterplot + geom_point()
+```
+
+* linegraph
+
+```{r}
+scatterplot + geom_line()
+```
+
+* scatterplot with blue triangles
+
+```{r}
+scatterplot + geom_point(color = "blue", size = 3, shape = 17)
+```
+
+* scatterplot with stars
+
+```{r}
+scatterplot + geom_point(color = "darkred", size = 3, shape = 8)
+```
+
+* Adding title to plot
+
+```{r}
+scatterplot + geom_point(color = "darkred", size = 3, shape = 15) + 
+  ggtitle("Fertility rate vs Gross national income")
+```
+
+* saving plot to file
+
+```{r}
+fertilityGNIplot = scatterplot + geom_point(color = "darkred", size = 3, shape = 8) + 
+  ggtitle("Fertility rate vs Gross national income")
+```
+
+```{r}
+pdf("Myplot.pdf")
+print(fertilityGNIplot)
+dev.off()
+```
+
+### Advance scatterplots using ggplot
+
+* Coloring the points by region
+
+```{r}
+ggplot(WHO, aes(x = GNI, y = FertilityRate, color = Region)) +
+  geom_point()
+```
+
+* Coloring the points by life expectancy
+
+```{r}
+ggplot(WHO, aes(x = GNI, y = FertilityRate, color = LifeExpectancy)) +
+  geom_point()
+```
+
+* Fertility rate vs Under15
+
+Note: In the below graph we see that the as the fertility rate increases, Under15 starts increasing  
+less.
+   
+```{r}
+ggplot(WHO, aes(x = FertilityRate, y = Under15)) + geom_point()
+```
+Note: We see that there is a linear relationship between the log(Fertilityrate) and Under15 variable  
+
+```{r}
+ggplot(WHO, aes(x = log(FertilityRate), y = Under15)) + geom_point()
+```
+
+* Building linear regression model between log(FertilityRate) and Under15
+
+```{r}
+model1 = lm(Under15 ~ log(FertilityRate), data = WHO)
+summary(model1)
+```
+
+* Adding regression line to the plot
+
+Note: The shaded portion around the regression line is the 99% confidence interval
+
+```{r}
+ggplot(WHO, aes(x = log(FertilityRate), y = Under15)) +
+  geom_point() + stat_smooth(method = "lm", level = 0.99, color = "orange")
+```
+
+* FertitlityRate vs Under15 by region
+
+```{r}
+ggplot(WHO, aes(x = FertilityRate, y = Under15, color = Region)) + 
+  geom_point()
+```
+

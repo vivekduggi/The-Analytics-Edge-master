@@ -1,0 +1,227 @@
+---
+title: "Predicting stock return with cluster-then-predict"
+output: html_notebook
+---
+
+### Loading dataset
+
+```{r}
+stocks = read.csv("StocksCluster.csv")
+```
+
+```{r}
+str(stocks)
+```
+
+### Proportion of stocks having positive returns in December
+
+```{r}
+table(stocks$PositiveDec)
+cat("Proportion of stocks with positive return =>",(6324)/11580)
+```
+
+### Correlation between variables
+
+```{r}
+cor(stocks)
+```
+### Largest mean return from January to November
+
+```{r}
+which.max(colMeans(stocks[1:11]))
+```
+
+### Smallest mean return from January to November
+
+```{r}
+which.min(colMeans(stocks[1:11]))
+```
+
+### Initial logistic regression model
+
+```{r}
+library(caTools)
+set.seed(144)
+```
+
+```{r}
+spl = sample.split(stocks$PositiveDec, SplitRatio = 0.7)
+stocksTrain = subset(stocks, spl == TRUE)
+stocksTest = subset(stocks,spl == FALSE)
+```
+
+```{r}
+stocksLog = glm(PositiveDec ~ ., data = stocksTrain, family = "binomial")
+summary(stocksLog)
+```
+
+```{r}
+trainPred = predict(stocksLog, type = "response")
+```
+
+* Accuracy of logistic regression model on training set  
+
+```{r}
+table(stocksTrain$PositiveDec, trainPred > 0.5)
+cat("Accuracy of logistic regression model on training set =>", (3640+990)/nrow(stocksTrain))
+```
+
+* Accuracy of logistic regression model on testing set
+
+```{r}
+testPred = predict(stocksLog, newdata = stocksTest, type = "response")
+```
+
+```{r}
+table(stocksTest$PositiveDec, testPred > 0.5)
+cat("Accuracy =>", (1553+417)/nrow(stocksTest))
+```
+
+* Accuracy on testing set of baseline model that predicts most common outcome  
+
+```{r}
+table(stocksTest$PositiveDec)
+cat("Accuracy =>", (1897)/nrow(stocksTest))
+```
+
+### Clustering stocks
+
+* The first step is to remove the dependent variable. It is done because needing to know the dependent variable value to assign an observation to a cluster defeats the purpose of the methodology.
+
+```{r}
+limitedTrain = stocksTrain
+limitedTest = stocksTest
+```
+
+```{r}
+limitedTrain$PositiveDec = NULL
+limitedTest$PositiveDec = NULL
+```
+
+* Normalizing the variables in the training set
+
+```{r}
+library(caret)
+```
+
+```{r}
+preproc = preProcess(limitedTrain)
+```
+
+```{r}
+normTrain = predict(preproc, limitedTrain)
+normTest = predict(preproc,limitedTest)
+```
+* Mean of ReturnJan variable in normTrain and normTest
+
+```{r}
+mean(normTrain$ReturnJan)
+mean(normTest$ReturnJan)
+```
+
+* Setting seed for clustering
+
+```{r}
+set.seed(144)
+k = 3
+```
+
+```{r}
+km = kmeans(normTrain, centers = k)
+```
+
+*Number of observations in each clusters
+
+```{r}
+table(km$cluster)
+```
+
+* Obtaining training and testing set cluster assignments for our observations  
+
+```{r}
+library(flexclust)
+```
+
+```{r}
+km.kcca = as.kcca(km,normTrain)
+```
+
+```{r}
+clusterTrain = predict(km.kcca)
+```
+
+```{r}
+clusterTest = predict(km.kcca, newdata = normTest)
+table(clusterTest)
+```
+
+* Building seperate dataframes for observations in seperate clusters  
+
+```{r}
+stocksTrain1 = subset(stocksTrain, km$cluster == 1)
+stocksTrain2 = subset(stocksTrain, km$cluster == 2)
+stocksTrain3 = subset(stocksTrain, km$cluster == 3)
+```
+
+```{r}
+stocksTest1 = subset(stocksTest, km$cluster == 1)
+stocksTest2 = subset(stocksTest, km$cluster == 2)
+stocksTest3 = subset(stocksTest, km$cluster == 3)
+```
+* Trainig set dataframe with highest average value for dependent variable  
+
+```{r}
+tapply(stocksTrain$PositiveDec, km$cluster, mean)
+```
+
+### Cluster-specific Predictions
+
+```{r}
+stocksModel1 = glm(PositiveDec ~ ., data = stocksTrain1, family = "binomial")
+stocksModel2 = glm(PositiveDec ~ ., data = stocksTrain2, family = "binomial")
+stocksModel3 = glm(PositiveDec ~ ., data = stocksTrain3, family = "binomial")
+```
+* Making predictions for each test set grouped by cluster
+
+```{r}
+PredictTest1 = predict(stocksModel1, newdata = stocksTest1, type = "response")
+PredictTest2 = predict(stocksModel2, newdata = stocksTest2, type = "response")
+PredictTest3 = predict(stocksModel3, newdata = stocksTest3, type = "response")
+```
+
+* Accuracy of model on test set 1
+
+```{r}
+table(stocksTest1$PositiveDec, PredictTest1 > 0.5)
+cat("Accuracy =>", (101+498)/(101+103+341+498))
+```
+
+* Accuracy for model on test set 2
+
+```{r}
+table(stocksTest2$PositiveDec, PredictTest2 > 0.5)
+cat("Accuracy =>", (361+862)/(361+862+301+686))
+```
+
+* Accuracy for model on test set 3
+
+```{r}
+table(stocksTest3$PositiveDec, PredictTest3 > 0.5)
+cat("Accuracy =>", (69+39)/(69+19+94+39))
+```
+
+* Compute overall test-set accuracy
+
+```{r}
+AllPredictions = c(PredictTest1,PredictTest2,PredictTest3)
+AllOutcomes = c(stocksTest1$PositiveDec,stocksTest2$PositiveDec, stocksTest3$PositiveDec)
+```
+
+```{r}
+table(AllOutcomes, AllPredictions > 0.5)
+cat("Accuracy =>", (531+1399)/(531+1399+498+1046))
+```
+
+
+
+

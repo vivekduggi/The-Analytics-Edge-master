@@ -1,0 +1,84 @@
+---
+title: "AirlinesCluster"
+output: html_notebook
+---
+
+### Loading dataset
+
+```{r}
+airlines = read.csv("AirlinesCluster.csv")
+str(airlines)
+```
+
+### Summary of dataset
+
+```{r}
+summary(airlines)
+```
+
+### Normalizing our data
+
+```{r}
+library("caret")
+```
+
+```{r}
+preproc = preProcess(airlines)
+airlinesNorm = predict(preproc,airlines)
+```
+
+```{r}
+str(airlinesNorm)
+summary(airlinesNorm)
+```
+### Calculating distances
+
+```{r}
+distances = dist(airlinesNorm, method = "euclidean")
+```
+
+### Performing hierarchical clustering
+
+```{r}
+airlineCluster = hclust(distances, method = "ward.D")
+```
+
+```{r}
+plot(airlineCluster)
+```
+### Assigning labels to datapoints
+
+```{r}
+airlineGroups = cutree(airlineCluster, k = 5)
+spl = split(airlinesNorm, airlineGroups)
+```
+
+```{r}
+tapply(airlines$DaysSinceEnroll,airlineGroups,mean)
+```
+
+### Running K-means clustering
+
+```{r}
+k = 5
+set.seed(88)
+```
+
+```{r}
+KMC = kmeans(airlinesNorm, centers = k, iter.max = 1000)
+```
+
+```{r}
+Kspl = split(airlinesNorm, KMC$cluster)
+```
+
+```{r}
+str(Kspl)
+```
+
+### Cluster centroid of k-means cluster
+
+```{r}
+by(airlines$Balance,KMC$cluster,mean)
+```
+

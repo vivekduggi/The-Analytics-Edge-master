@@ -1,0 +1,320 @@
+---
+title: "Separating Spam from ham"
+output: html_notebook
+---
+
+
+###Loading dataset
+
+```{r}
+emails = read.csv("emails.csv", stringsAsFactors = FALSE)
+str(emails)
+sum(emails$spam)
+emails$text[1]
+```
+
+
+###Longest email
+
+```{r}
+which.max(nchar(emails$text))
+nchar(emails$text[2651])
+```
+
+###Smallest email
+
+```{r}
+which.min(nchar(emails$text))
+nchar(emails$text[1992])
+```
+
+
+###Preparing corpus
+
+```{r}
+library(tm)
+library(SnowballC)
+```
+
+```{r}
+corpus = VCorpus(VectorSource(emails$text))
+corpus = tm_map(corpus, content_transformer(tolower))
+corpus = tm_map(corpus, removePunctuation)
+corpus = tm_map(corpus, removeWords, stopwords("english"))
+corpus = tm_map(corpus, stemDocument)
+```
+
+###Bag of words
+
+```{r}
+dtm = DocumentTermMatrix(corpus)
+dtm
+```
+
+
+```{r}
+spdtm = removeSparseTerms(dtm, 0.95)
+spdtm
+```
+
+```{r}
+emailSparse = as.data.frame(as.matrix(spdtm))
+colnames(emailSparse) = make.names(colnames(emailSparse))
+```
+
+
+###Most frequent word
+
+```{r}
+which.max(colSums(emailSparse))
+```
+
+###Adding labels to dataframe ***emailSparse***  
+
+```{r}
+emailSparse$spam = emails$spam
+```
+
+###Stem words appearing at least 5000 times
+
+```{r}
+sort(colSums(subset(emailSparse, spam == 0)), decreasing = TRUE)[1:6]
+```
+
+
+###Stem words appearing at least 1000 times
+
+```{r}
+sort((colSums(subset(emailSparse, spam == 1))) >= 1000)
+```
+
+
+### Converting *spam* to factor variable
+
+```{r}
+emailSparse$spam = as.factor(emailSparse$spam)
+```
+
+
+###Splitting data
+
+```{r}
+library(caTools)
+```
+
+```{r}
+set.seed(123)
+spl = sample.split(emailSparse$spam, SplitRatio = 0.7)
+train = subset(emailSparse, spl == TRUE)
+test = subset(emailSparse, spl == FALSE)
+```
+
+###A logistic regression model
+
+```{r}
+emailLog = glm(spam ~., data = train, family = "binomial")
+predLog = predict(emailLog, type = "response")
+```
+
+```{r}
+table(predLog < 0.00001)
+```
+
+```{r}
+table(predLog > 0.99999)
+```
+
+```{r}
+table(predLog >= 0.00001 & predLog <= 0.99999)
+```
+
+```{r}
+summary(emailLog)
+```
+```{r}
+table(train$spam, predLog >= 0.5)
+cat("Accuracy of logistic regression model on training set =>", (3052+954)/nrow(train))
+```
+
+```{r}
+library(ROCR)
+```
+
+```{r}
+predLogROCR = prediction(predLog, train$spam)
+cat("Area under curve for logistic regression model on training curve =>", as.numeric(performance(predLogROCR, "auc")@y.values))
+```
+
+
+###A CART model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+emailCART = rpart(spam ~ ., data = train, method = "class")
+prp(emailCART)
+```
+
+
+```{r}
+predCART = predict(emailCART)
+table(train$spam, predCART[,2] > 0.5)
+cat("Accuracy of CART model on training set =>", (2885+894)/nrow(train))
+```
+
+```{r}
+predCARTrocr = prediction(predCART[,2], train$spam)
+cat("Area under curve for CART model =>", as.numeric(performance(predCARTrocr, "auc")@y.values))
+```
+
+
+
+
+###A random forest model
+
+```{r}
+set.seed(123)
+library(randomForest)
+```
+
+```{r}
+emailRF = randomForest(spam ~., data = train)
+emailRFpred = predict(emailRF, type = "prob")
+```
+
+```{r}
+table(train$spam, emailRFpred[,2] > 0.5)
+cat("Accuracy of random forest model over training set =>", (3015+917)/nrow(train))
+```
+
+
+```{r}
+emailRFrocr = prediction(emailRFpred[,2], train$spam)
+cat("Area under curve for random forest model =>", as.numeric(performance(emailRFrocr, "auc")@y.values))
+```
+
+
+
+
+###Logistic Model - testing set predictions
+
+```{r}
+predLogTest = predict(emailLog, newdata = test, type = "response")
+table(test$spam, predLogTest > 0.5)
+cat("Accuracy of Logistic Regression model on test set =>", (1257+376)/nrow(test))
+```
+
+
+```{r}
+predLogTestrocr = prediction(predLogTest, test$spam)
+cat("Area under curve for testing set =>", as.numeric(performance(predLogTestrocr, "auc")@y.values))
+```
+
+
+###CART model - testing set predictions
+
+```{r}
+predCARTtest = predict(emailCART, newdata = test)
+table(test$spam, predCARTtest[,2] > 0.5)
+cat("Accuracy on testing set =>", (1228+386)/nrow(test))
+```
+
+
+
+```{r}
+predCARTtestROCR = prediction(predCARTtest[,2], test$spam)
+cat("Area under curve for testing set =>", as.numeric(performance(predCARTtestROCR, "auc")@y.values))
+```
+
+
+###Random forest - testing set predictions
+
+```{r}
+predRFtest = predict(emailRF, newdata = test, type = "prob")
+table(test$spam, predRFtest[,2] > 0.5)
+cat("Accuracy on testing set =>", (1290+385)/nrow(test))
+```
+
+
+```{r}
+predRFtestROCR = prediction(predRFtest[,2], test$spam)
+cat("Area under curve for testing set =>", as.numeric(performance(predRFtestROCR, "auc")@y.values))
+```
+
+
+
+
+###Integrating word count information
+
+Note: We'll use number of words in each email as independent variable
+
+```{r}
+library(slam)
+wordCount = rollup(dtm,2,FUN=sum)$v
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+hist(x = wordCount)
+```
+
+```{r}
+hist(x = log(wordCount))
+```
+
+```{r}
+emailSparse$logWordCount = log(wordCount)
+```
+
+```{r}
+ggplot(aes(x = spam, y = logWordCount), data = emailSparse) + geom_boxplot()
+```
+
+
+###Building model using ***logWordCount*** as an additional variable  
+
+```{r}
+train2 = subset(emailSparse, spl == TRUE)
+test2 = subset(emailSparse, spl == FALSE)
+```
+
+```{r}
+spam2CART = rpart(spam ~ ., data = train)
+prp(spam2CART)
+```
+
+```{r}
+spamPredCART = predict(spam2CART, newdata = test)
+table(test$spam, spamPredCART[,2] > 0.5)
+cat("Accuracy of our CART tree =>", (1214+384)/nrow(test))
+```
+
+```{r}
+spamROCR = prediction(spamPredCART[,2], test$spam)
+cat("Area under curve for CART model =>", as.numeric(performance(spamROCR, "auc")@y.values))
+```
+
+
+
+```{r}
+set.seed(123)
+spam2RF = randomForest(spam ~ ., data = train)
+spamPredRF = predict(spam2RF, newdata = test, type = "prob")
+```
+
+```{r}
+table(test$spam, spamPredRF[,2] > 0.5)
+cat("Accuracy of our Random Forest model =>", (1298+382)/nrow(test))
+```
+
+```{r}
+spamRFrocr = prediction(spamPredRF[,2], test$spam)
+cat("Area under curve for Random forest model =>", as.numeric(performance(spamRFrocr, "auc")@y.values))
+```
+

@@ -1,0 +1,121 @@
+---
+title: "Visualising text data using word clouds"
+output: html_notebook
+---
+
+
+* Loading dataset
+
+```{r}
+tweets <- read.csv("tweets.csv", stringsAsFactors = FALSE)
+str(tweets)
+```
+
+
+* Pre-processing
+
+```{r}
+library(tm)
+library(SnowballC)
+```
+
+```{r}
+corpus <- VCorpus(VectorSource(tweets$Tweet))
+corpus[[1]]$content
+```
+
+```{r}
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+```
+
+```{r}
+dtm <- DocumentTermMatrix(corpus)
+```
+
+```{r}
+allTweets <- as.data.frame(as.matrix(dtm))
+```
+
+```{r}
+str(allTweets)
+```
+
+```{r}
+library(wordcloud)
+```
+
+* Plotting wordcloud
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(2,0.25))
+```
+
+* Removing "apple"
+
+```{r}
+corpus <- tm_map(corpus, removeWords, c("apple",stopwords("english")))
+dtm <- DocumentTermMatrix(corpus)
+allTweets <- as.data.frame(as.matrix(dtm))
+```
+
+```{r}
+str(allTweets)
+```
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(2,0.25))
+```
+
+```{r}
+?wordcloud
+```
+
+* Word cloud based on negative tweets
+
+```{r}
+negativeTweets = subset(allTweets, tweets$Avg <= -1)
+wordcloud(colnames(negativeTweets), colSums(negativeTweets), scale = c(2,0.5))
+```
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(2,0.25))
+```
+
+* Word cloud with random.order = FALSE
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(2,0.25), random.order = FALSE)
+```
+
+* Word cloud with non-default value for rot.per
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(2,0.25), rot.per = .5)
+```
+
+* Word cloud with random.color set to TRUE
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(2,0.25), random.color = TRUE)
+```
+
+* Selecting a color palette
+
+```{r}
+library(RColorBrewer)
+```
+
+```{r}
+brewer.pal(n = 3,name = "Accent")
+```
+
+```{r}
+display.brewer.all()
+```
+
+```{r}
+wordcloud(colnames(allTweets), colSums(allTweets), scale = c(3,0.35), colors = brewer.pal(9,"Blues")[c(5,6,7,8,9)])
+```
+

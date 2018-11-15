@@ -1,0 +1,89 @@
+---
+title: "MRI image"
+output: html_notebook
+---
+
+### Reading the data
+
+```{r}
+healthy = read.csv("healthy.csv", header = FALSE)
+```
+
+### Creating matrix
+
+```{r}
+healthyMatrix = as.matrix(healthy)
+str(healthyMatrix)
+```
+
+### Generating the image
+
+```{r}
+image(healthyMatrix, axes = FALSE, col = grey(seq(0,1,length = 256)))
+```
+
+### Creating a vector
+
+```{r}
+healthyVector = as.vector(healthyMatrix)
+```
+
+### Performing clustering
+
+```{r}
+str(healthyVector)
+```
+
+Note: We see that the length of vector *healthyVector* is 365636, the distance vector will have  
+365636*(365635)/2 = approx 67 billion values, so we cannot create a distance vector so huge,  
+and unfortunately cannot apply hierarchical clustering.
+
+
+* Setting number of clusters to 5
+
+```{r}
+k = 5
+set.seed(1)
+```
+
+```{r}
+KMC = kmeans(healthyVector, centers = k, iter.max = 1000)
+```
+
+```{r}
+KMC
+str(KMC)
+```
+
+```{r}
+healthyClusters = KMC$cluster
+KMC$centers
+```
+
+
+### Generating the segmented image
+
+```{r}
+dim(healthyClusters) = c(nrow(healthyMatrix),ncol(healthyMatrix))
+image(healthyClusters, axes = FALSE, col = rainbow(k))
+```
+
+
+### Using clustering to identify tumor in MRI
+
+```{r}
+tumor = read.csv("tumor.csv", header = FALSE)
+tumorMatrix = as.matrix(tumor)
+tumorVector = as.vector(tumorMatrix)
+```
+
+```{r}
+library(flexclust)
+```
+
+```{r}
+KMC.kcca = as.kcca(KMC, healthyVector)
+```
+
+
+

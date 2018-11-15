@@ -1,0 +1,110 @@
+
+                                
+                                           Predicting Loan Repayment  
+                                
+                                
+                
+      
+      
+##### Loading dataset 
+                                           
+```{r}
+setwd("~/R_datasets/")
+loans = read.csv("loans.csv")
+str(loans)
+summary(loans)
+```
+##### Proportion of loans in dataset not paid in full
+
+```{r}
+sum(loans$not.fully.paid) / nrow(loans)
+missing = subset(loans, is.na(log.annual.inc) | is.na(days.with.cr.line) | is.na(revol.util) | is.na(inq.last.6mths) | is.na(delinq.2yrs) | is.na(pub.rec))
+nrow(missing)
+table(missing$not.fully.paid)
+```
+##### Imputing dataset
+
+```{r}
+library(mice)
+set.seed(144)
+vars.for.imputation = setdiff(names(loans), "not.fully.paid")
+imputed = complete(mice(loans[vars.for.imputation]))
+loans[vars.for.imputation] = imputed
+```
+##### Splitting data into training and testing set
+
+```{r}
+set.seed(144)
+library(caTools)
+split = sample.split(loans$not.fully.paid, SplitRatio = 0.7)
+train = subset(loans, split == TRUE)
+test = subset(loans, split == FALSE)
+```
+##### Creating our logistic regression model
+
+```{r}
+loansLog = glm(not.fully.paid ~ ., data = train, family = "binomial")
+summary(loansLog)
+```
+##### Making predictions on dataset
+
+```{r}
+predicted.risk = predict(loansLog, newdata = test, type="response")
+test$predicted.risk = predicted.risk
+table(test$not.fully.paid, predicted.risk >= 0.5)
+table(test$not.fully.paid)
+sprintf("Accuracy of logistic regression model => %f", (2400+3)/(2400+3+13+457))
+sprintf("Accuracy of baseline model => %f", (2413)/(2413+460))
+
+```
+##### Calculating AUC
+
+```{r}
+library(ROCR)
+pred = prediction(predicted.risk, test$not.fully.paid)
+as.numeric(performance(pred, "auc")@y.values)
+```
+##### Creating a bivariate model using int.rate as independent variable
+
+```{r}
+loansLog1 = glm(not.fully.paid ~ int.rate, data = train, family = "binomial")
+summary(loansLog1)
+```
+##### Making predictions using bivariate model
+
+```{r}
+predict.risk1 = predict(loansLog1, newdata = test, type = "response")
+max(predict.risk1)
+pred1 = prediction(predict.risk1, test$not.fully.paid)
+as.numeric(performance(pred1, "auc")@y.values)
+```
+                                           A simple investment strategy
+
+An investor who invested c dollars in a loan with interest rate r for t years makes c * (exp(rt) - 1) dollars of profit if the loan is paid back in full and -c dollars of profit if the loan is not paid back in full (pessimistically).
+Let investment be $1.
+```{r}
+test$profit = exp(test$int.rate*3) - 1
+test$profit[test$not.fully.paid == 1] = -1
+which.max(test$profit)
+sprintf("Maximum profit for $ 10 investment => %f", test$profit[1780] * 10)
+```
+                                           An Investment strategy based on risk
+
+A simple investment strategy of equally investing in all the loans would yield profit $20.94 for a $100 investment. But this simple investment strategy does not leverage the prediction model we built earlier in this problem. As stated earlier, investors seek loans that balance reward with risk, in that they simultaneously have high interest rates and a low risk of not being paid back.
+To meet this objective, we will analyze an investment strategy in which the investor only purchases loans with a high interest rate (a rate of at least 15%), but amongst these loans selects the ones with the lowest predicted risk of not being paid back in full. We will model an investor who invests $1 in each of the most promising 100 loans.
+
+```{r}
+highInterest = subset(test, int.rate >= 0.15)
+sprintf("Average profit of $1 investment => %f", mean(highInterest$profit))
+prop.table(table(highInterest$not.fully.paid))
+```
+Next, we will determine the 100th smallest predicted probability of not paying in full by sorting the predicted risks in increasing order and selecting the 100th element of this sorted list. 
+
+```{r}
+cutoff = sort(highInterest$predicted.risk, decreasing = FALSE)[100]
+cutoff
+selectedLoans = subset(highInterest, predicted.risk <= cutoff)
+sprintf("Profit of investor who invested $1 in each of these 100 loans => %f", sum(selectedLoans$profit))
+table(selectedLoans$not.fully.paid)
+```
+

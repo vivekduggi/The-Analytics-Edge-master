@@ -1,0 +1,142 @@
+
+```{r}
+###########   Modelling the expert: An introduction to logistic regression   ############
+
+
+
+##### Importing the dataset
+
+setwd("~/R_datasets/")
+quality = read.csv("quality.csv")
+
+##### Lets take a look at the structure of our dataset
+
+str(quality)
+
+```
+
+```{r}
+##### Lets's make a table of our outcome variable "PoorCare"
+
+table(quality$PoorCare)
+
+##### Note: In logistic regression our "Baseline Model" is to just predict the more frequent outcome. So for our dataset we predict that all
+##### of our patients are receiving good care, and thus we have an accuracy of about 75%.
+```
+
+```{r}
+##### Loading "caTools" package in current session
+
+library(caTools)
+
+##### Initializing the random number generator
+
+set.seed(88)
+```
+
+```{r}
+##### Splitting our dataset in training and testing sets
+
+split = sample.split(quality$PoorCare, SplitRatio = 0.75)
+split
+
+```
+
+```{r}
+##### TRUE in the split means we put that observation in our training test, and FALSE means we put that observation in our testing set.
+##### Now make training and testing datasets using subset()
+
+qualityTrain = subset(quality, split == TRUE)
+qualityTest = subset(quality,split == FALSE )
+nrow(qualityTrain)
+nrow(qualityTest)
+```
+
+```{r}
+##### Making our Logistic Regression model
+
+QualityLog = glm(PoorCare ~ OfficeVisits + Narcotics, data = qualityTrain, family = binomial)
+
+##### Summary of our model
+
+summary(QualityLog)
+
+##### Note: AIC value is the measure of quality of model, it can only be compared between models on the same dataset.
+##### The preferred model is one with the minimum AIC value
+
+```
+
+```{r}
+##### Now let's make prediction on our training set
+
+predictTrain = predict(QualityLog, type="response")
+
+##### Statistical summary of our predictions
+
+summary(predictTrain)
+tapply(predictTrain, qualityTrain$PoorCare, mean)
+```
+
+```{r}
+##### Logistic Regression model to predict "PoorCare" using the independent variables "StartedOnCombination" and "ProviderCount"
+
+QualityLog1 = glm(PoorCare ~ StartedOnCombination + ProviderCount, data = qualityTrain, family = binomial)
+
+#### Summary of QualityLog1
+
+summary(QualityLog1)
+```
+
+```{r}
+##### Making classification tables using different threshold values
+##### Threshold value = 0.5
+
+table(qualityTrain$PoorCare, predictTrain > 0.5)
+
+##### Calculating True positive rate or "Sensitivity" and True negative rate or "Specificity"
+
+Senstivity = 10 / (25)
+Senstivity
+Specificty = 70 / (74)
+Specificty
+
+##### Threshold value = 0.5
+
+table(qualityTrain$PoorCare, predictTrain > 0.7)
+Senstivity = 8/25
+Specificty = 73/74
+Senstivity
+Specificty
+
+##### Threshold value = 0.2
+
+table(qualityTrain$PoorCare, predictTrain > 0.2)
+Senstivity = 16/25
+Specificity = 54/74
+Senstivity
+Specificity
+
+
+```
+
+```{r}
+##### Let's make our ROCR curve start by loading "ROCR" package
+##### It will help us decide the threshold value
+
+library(ROCR)
+ROCRpred = prediction(predictTrain, qualityTrain$PoorCare)
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize = TRUE, print.cutoffs.at = seq(0,1,0.1), text.adj = c(-0.2,1.7))
+
+
+```
+
+```{r}
+#####  Area under Reciever operating characterstic curve
+
+predictTest = predict(QualityLog, type = "response", newdata = qualityTest)
+ROCRpredTest = prediction(predictTest, qualityTest$PoorCare)
+auc = as.numeric(performance(ROCRpredTest, "auc")@y.values)
+auc
+```
+

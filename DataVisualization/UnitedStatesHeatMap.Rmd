@@ -1,0 +1,94 @@
+---
+title: "Heat map on United States"
+output: html_notebook
+---
+
+### Loading required libraries
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggmap)
+```
+
+### Loading dataset
+
+```{r}
+murders = read.csv("murders.csv")
+str(murders)
+```
+
+### Loading map of United States
+
+```{r}
+statesMap = map_data("state")
+str(statesMap)
+```
+
+```{r}
+ggplot(data = statesMap, aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill = "white", color = "black")
+```
+
+### Making sure that the state name in our murders dataset is same as in statesMap
+
+```{r}
+murders$region = tolower(murders$State)
+```
+
+### Joining the dataframes "statesMap" and "murders"
+
+```{r}
+murderMap <- merge(statesMap, murders, by = "region")
+str(murderMap)
+```
+
+### Plotting the murders on the map
+
+* We can see that states of California and Texas have unusually high number of murders, but that may be because of high population, so we'll plot a map for population.
+
+```{r}
+ggplot(aes(x = long, y = lat, group = group, fill = Murders), data = murderMap) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "black", high = "red", guide = "legend")
+```
+
+* Plotting a map of population of each state
+
+```{r}
+ggplot(aes(x = long, y = lat, group = group, fill = Population), data = murderMap) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "black", high = "red", guide = "legend")
+```
+
+* Plotting a map for murder rate variable
+
+Note: Our map for murder rate is maroon in color for most parts, there is not any red state, because Washington,DC is an outlier.
+
+```{r}
+murderMap$MurderRate <- murderMap$Murders / murderMap$Population * 100000
+```
+
+```{r}
+ggplot(aes(x = long, y = lat, group = group, fill = MurderRate), data = murderMap) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "black", high = "red", guide = "legend")
+```
+
+* Removing Washington DC from data
+
+```{r}
+ggplot(aes(x = long, y = lat, group = group, fill = MurderRate), data = murderMap) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "black", high = "red", guide = "legend", limits = c(0,10))
+```
+
+* States with highest number of people owning guns
+
+```{r}
+ggplot(aes(x = long, y = lat, group = group, fill = GunOwnership), data = murderMap) +
+  geom_polygon(color = "black") + 
+  scale_fill_gradient(low = "black", high = "red", guide = "legend")
+```
+

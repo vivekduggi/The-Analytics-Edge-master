@@ -1,0 +1,217 @@
+---
+title: "Detecting vandalism on wikipedia"
+output: html_notebook
+---
+
+###1. Loading the dataset
+
+```{r}
+wiki = read.csv("wiki.csv", stringsAsFactors = FALSE)
+str(wiki)
+```
+
+```{r}
+wiki$Vandal = as.factor(wiki$Vandal)
+table(wiki$Vandal)
+```
+
+
+###2. Bags of words
+
+```{r}
+library(tm)
+library(SnowballC)
+```
+1. Building dataframe for words added
+
+```{r}
+corpusAdded = Corpus(VectorSource(wiki$Added))
+corpusAdded = tm_map(corpusAdded, removeWords, stopwords("english"))
+corpusAdded = tm_map(corpusAdded, stemDocument)
+```
+
+```{r}
+dtmAdded = DocumentTermMatrix(corpusAdded)
+sparseAdded = removeSparseTerms(dtmAdded, 0.997)
+sparseAdded
+```
+
+```{r}
+wordAdded = as.data.frame(as.matrix(sparseAdded))
+colnames(wordAdded) = paste("A", colnames(wordAdded))
+```
+2. Building data frame for removed words
+
+```{r}
+corpusRemoved = Corpus(VectorSource(wiki$Removed))
+corpusRemoved = tm_map(corpusRemoved, removeWords, stopwords("english"))
+corpusRemoved = tm_map(corpusRemoved, stemDocument)
+```
+
+
+```{r}
+dtmRemoved = DocumentTermMatrix(corpusRemoved)
+sparseRemoved = removeSparseTerms(dtmRemoved, 0.997)
+sparseRemoved
+```
+
+```{r}
+wordRemoved = as.data.frame(as.matrix(sparseRemoved))
+colnames(wordRemoved) = paste("R", colnames(wordRemoved))
+wordRemoved
+```
+
+3. Combining dataframes "wordAdded", and "wordRemoved"
+
+```{r}
+wikiWords = cbind(wordAdded, wordRemoved)
+wikiWords$Vandal = wiki$Vandal
+```
+
+
+
+###3. Splitting the dataset
+
+```{r}
+library(caTools)
+set.seed(123)
+```
+
+```{r}
+split = sample.split(wikiWords$Vandal, SplitRatio = 0.7)
+wikiTrain = subset(wikiWords, split == TRUE)
+wikiTest = subset(wikiWords, split == FALSE)
+```
+
+```{r}
+table(wikiTest$Vandal)
+cat("Accuracy of baseline model on test set =>", (618)/nrow(wikiTest))
+```
+
+
+
+###4. CART model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+wikiCART = rpart(Vandal ~., data = wikiTrain, method = "class")
+wikiPred = predict(wikiCART, newdata = wikiTest, type = "class")
+```
+
+```{r}
+table(wikiTest$Vandal, wikiPred)
+cat("Accuracy of our CART model =>", (614+19)/nrow(wikiTest))
+```
+
+```{r}
+prp(wikiCART)
+```
+
+
+
+Note: We see that although our CART model beats our baseline model, but it is not very predictive for this problem, or more specifically we can see that the word themselves are not very useful.
+
+We hypothesize that given a lot of vandalism seems to be adding links to promotional or irrelevant websites, the presence of web address, is a sign of vandalism.
+
+
+```{r}
+wikiWords2 = wikiWords
+wikiWords2$HTTP = ifelse(grepl("http", wiki$Added, fixed = TRUE),1, 0)
+```
+
+```{r}
+sum(wikiWords2$HTTP)
+```
+
+CART model using new variable **"HTTP"**
+
+```{r}
+wikiTrain2 = subset(wikiWords2, split == TRUE)
+wikiTest2 = subset(wikiWords2, split == FALSE)
+```
+
+```{r}
+wikiCART2 = rpart(Vandal ~., data = wikiTrain2, method = "class")
+wikiPred2 = predict(wikiCART2, newdata = wikiTest2, type = "class")
+table(wikiTest2$Vandal, wikiPred2)
+```
+
+```{r}
+cat("Accuracy of our CART model with new variable HTTP =>", (605+64)/nrow(wikiTest2))
+```
+
+
+Note: The number of word added or removed may be predictive, more than the actual word themselves.
+
+
+
+
+**Counting number of words added and removed**
+
+```{r}
+wikiWords2$NumWordsAdded = rowSums(as.matrix(dtmAdded))
+wikiWords2$NumWordsRemoved = rowSums(as.matrix(dtmRemoved))
+```
+
+```{r}
+sum(wikiWords2$NumWordsAdded) / nrow(wikiWords2)
+```
+
+
+
+CART model after including new varibale **NumWordsAdded**
+
+```{r}
+wikiTrain3 = subset(wikiWords2, split == TRUE)
+wikiTest3 = subset(wikiWords2, split == FALSE)
+```
+
+```{r}
+wikiCART3  = rpart(Vandal ~., data = wikiTrain3, method = "class")
+wikiPred3 = predict(wikiCART3, newdata = wikiTest3, type = "class")
+table(wikiTest3$Vandal, wikiPred3)
+cat("Accuracy of our CART model after including variable NumWordsAdded =>", (514+248)/nrow(wikiTest3))
+```
+
+
+
+**Using Metadata**
+
+```{r}
+wikiWords3 = wikiWords2
+```
+
+```{r}
+wikiWords3$Minor = wiki$Minor
+wikiWords3$Loggedin = wiki$Loggedin
+```
+
+```{r}
+wikiTrain4 = subset(wikiWords3, split == TRUE)
+wikiTest4 = subset(wikiWords3, split == FALSE)
+```
+
+```{r}
+wikiCART4 = rpart(Vandal ~., data = wikiTrain4, method = "class")
+wikiPred4 = predict(wikiCART4, newdata = wikiTest4, type = "class")
+```
+
+```{r}
+table(wikiTest4$Vandal, wikiPred4)
+cat("Accuracy of our CART model after using metadata =>", (594+241)/nrow(wikiTest4))
+```
+
+
+```{r}
+prp(wikiCART4)
+```
+
+
+
+
+Note: We see that after adding new features to our model it's accuracy has been increased substantially, but the model still has only 3 splits, thus we can make model more accurate by adding right features to it and without increasing its complexity.
+

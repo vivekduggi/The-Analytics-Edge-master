@@ -1,0 +1,184 @@
+---
+title: "Automating Reviews in Medicine"
+output: html_notebook
+---
+
+
+###Loading dataset
+
+```{r}
+trials = read.csv("clinical_trial.csv", stringsAsFactors = FALSE)
+```
+
+###Longest abstract
+
+```{r}
+nchar(trials$abstract[664])
+```
+
+###Number of search results with no abstract
+
+```{r}
+table(nchar(trials$abstract) == 0)
+```
+
+###Observations with number of characters in the title
+
+```{r}
+which.min(nchar(trials$title))
+trials$title[1258]
+```
+
+###Preparing the corpus for title and abstract
+
+```{r}
+library(tm)
+library(SnowballC)
+```
+
+```{r}
+corpusTitle = VCorpus(VectorSource(trials$title))
+corpusAbstract = VCorpus(VectorSource(trials$abstract))
+```
+
+```{r}
+corpusTitle = tm_map(corpusTitle, content_transformer(tolower))
+corpusAbstract = tm_map(corpusAbstract, content_transformer(tolower))
+```
+
+```{r}
+corpusTitle = tm_map(corpusTitle, removeWords, stopwords("english"))
+corpusAbstract = tm_map(corpusAbstract, removeWords, stopwords("english"))
+```
+
+```{r}
+corpusTitle = tm_map(corpusTitle, stemDocument)
+corpusAbstract = tm_map(corpusAbstract, stemDocument)
+```
+
+```{r}
+dtmTitle = DocumentTermMatrix(corpusTitle)
+dtmAbstract = DocumentTermMatrix(corpusAbstract)
+```
+
+```{r}
+dtmTitle = removeSparseTerms(dtmTitle, 0.95)
+dtmAbstract = removeSparseTerms(dtmAbstract, 0.95)
+```
+
+```{r}
+dtmTitle = as.data.frame(as.matrix(dtmTitle))
+dtmAbstract = as.data.frame(as.matrix(dtmAbstract))
+```
+
+###Most frequent stem across all the abstract
+
+```{r}
+which.max(colSums(dtmAbstract))
+```
+```{r}
+colnames(dtmTitle) = paste0("T", colnames(dtmTitle))
+colnames(dtmAbstract) = paste0("A", colnames(dtmAbstract))
+```
+
+###Combining data frames
+
+```{r}
+dtm = cbind(dtmTitle, dtmAbstract)
+dtm$trial = trials$trial
+ncol(dtm)
+```
+
+###Splitting data
+
+```{r}
+library(caTools)
+set.seed(144)
+```
+
+```{r}
+spl = sample.split(dtm$trial, SplitRatio = 0.7)
+train = subset(dtm, spl == TRUE)
+test = subset(dtm, spl == FALSE)
+```
+
+
+###Baseline model
+
+```{r}
+table(train$trial)
+cat("Accuracy of baseline model on training set =>", (730/nrow(train)))
+```
+
+### CART model using all independent variables
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+trialCART = rpart(trial ~., data = train, method = "class")
+prp(trialCART)
+```
+
+
+
+
+
+
+###Training set predictions for model
+
+```{r}
+trialPred = predict(trialCART)
+max(trialPred[,2])
+```
+
+
+###Training set accuracy of CART model with a threshold of 0.5
+
+```{r}
+trialPred = predict(trialCART, type="class")
+```
+
+```{r}
+table(train$trial, trialPred)
+cat("Accuracy of CART model on training set =>", (630+451)/nrow(train),"\n")
+cat("Training set senstivity =>",(451)/(451+121),"\n")
+cat("Training set specificity =>", (630)/(730))
+```
+
+###Testing set accuracy
+
+```{r}
+trialPred = predict(trialCART, newdata = test, type="class")
+```
+
+```{r}
+table(test$trial, trialPred)
+cat("Accuracy of CART model on testing set =>", (257+182)/nrow(test))
+```
+
+###Testing set AUC for prediction model
+
+```{r}
+library(ROCR)
+```
+
+Note: If planning to plot an ROCR curve dont use type = "class" in predict function
+
+```{r}
+trialPred = predict(trialCART, newdata = test)
+trialROCR = prediction(trialPred[,2], test$trial)
+trialPerf = performance(trialROCR, "tpr", "fpr")
+plot(trialPerf, colorize = TRUE)
+cat("Area under curve =>", as.numeric(performance(trialROCR, "auc")@y.values))
+```
+
+
+
+**Note:** Following points are worth mentioning -  
+1. A false positive refers to the document that is actually irrelevant to the trials but has been classified as relevant, it is then eliminated in the manual review process, however it increases the amount of work to be done manually, but it doesn't affects the end result   
+2.A false negative refers to the document that is actually relevant but has been classified as irrelevant, its cost is much higher as it may affect the end result.  
+
+So we conclude that we should use a threshold of less than 0.5, so as to minimise our false negatives, and thus minimising our cost asscociated with, even if it incurs us some extra manual work, but it ensures that our end result is highly accurate.
